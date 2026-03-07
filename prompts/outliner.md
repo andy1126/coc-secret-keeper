@@ -21,9 +21,9 @@
     {
       "number": 1,
       "title": "章节标题",
-      "summary": "章节摘要（100字左右）",
+      "summary": "章节摘要（150字左右）",
       "mood": "情绪基调",
-      "word_target": 3000,
+      "word_target": 2000,
       "foreshadowing": ["伏笔1", "伏笔2"],
       "payoffs": ["回收1"]
     }

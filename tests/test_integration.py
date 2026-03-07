@@ -188,6 +188,7 @@ def test_final_review():
         ),
     ]
     context.chapters = ["第一章内容...", "第二章内容..."]
+    context.chapter_summaries = ["第一章摘要", "第二章摘要"]
 
     mock_llm = Mock()
     reviewer = ReviewerAgent(mock_llm)

@@ -1,8 +1,10 @@
 import json
-import re
+import logging
 from crewai import LLM
 
 from models.story_context import StoryContext
+
+logger = logging.getLogger("coc.llm")
 
 
 class BrainstormAgent:
@@ -25,17 +27,9 @@ class BrainstormAgent:
 
     def _extract_seed(self, text: str) -> dict:
         """Extract JSON seed from agent response."""
-        # Try to find JSON block
-        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group(1))
+        from agents.json_utils import extract_json_object
 
-        # Try to find raw JSON
-        json_match = re.search(r'\{[\s\S]*"theme"[\s\S]*\}', text)
-        if json_match:
-            return json.loads(json_match.group(0))
-
-        return {}
+        return extract_json_object(text) or {}
 
     def chat(self, user_input: str, context: StoryContext) -> str:
         """Process user input and return agent response.
@@ -53,7 +47,9 @@ class BrainstormAgent:
             },
         ]
 
+        logger.info("BrainstormAgent.chat: calling LLM with %d messages", len(messages))
         result_text = self.llm.call(messages=messages)
+        logger.info("BrainstormAgent.chat: received response (%d chars)", len(result_text))
 
         self.conversation_history.append({"role": "assistant", "content": result_text})
 

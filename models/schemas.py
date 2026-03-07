@@ -36,7 +36,9 @@ class ChapterOutline(BaseModel):
 
 
 class ReviewIssue(BaseModel):
-    category: str = Field(description="问题类别: wording/grammar/atmosphere/plot/worldview")
+    category: str = Field(
+        description="问题类别: wording/grammar/atmosphere/plot/worldview/completeness"
+    )
     severity: str = Field(description="严重程度: minor/major")
     description: str = Field(description="问题描述")
     suggestion: str = Field(description="修改建议")

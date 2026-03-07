@@ -33,3 +33,4 @@ outputs/
 *.txt
 !requirements.txt
 config.yaml
+logs/

@@ -8,6 +8,7 @@
 3. 检查情节矛盾、逻辑漏洞（大问题）
 4. 检查神话设定一致性（大问题）
 5. 检查伏笔回收情况
+6. 检查章节完整性：是否覆盖大纲所有要点，是否在句子中间截断。特别是章节最后的句子。
 
 ## 输入
 - 世界观设定
@@ -22,7 +23,7 @@
   "passed": false,
   "issues": [
     {
-      "category": "wording|grammar|atmosphere|plot|worldview",
+      "category": "wording|grammar|atmosphere|plot|worldview|completeness",
       "severity": "minor|major",
       "description": "问题描述",
       "suggestion": "修改建议"
@@ -45,6 +46,8 @@
 - 与已确立设定冲突
 - 角色行为不合人设
 - 伏笔被忽略
+- 章节未完成或在句中截断
+- 大纲要求的场景/情节点被遗漏
 
 ## 克苏鲁神话一致性检查
 - 古神不应被人类理解或沟通

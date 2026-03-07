@@ -1,9 +1,11 @@
 import json
-import re
+import logging
 from crewai import Agent, Task, Crew
 
 from models.story_context import StoryContext
 from models.schemas import WorldSetting, Character, Entity
+
+logger = logging.getLogger("coc.llm")
 
 
 class WorldbuilderAgent:
@@ -19,17 +21,11 @@ class WorldbuilderAgent:
 
     def _extract_world(self, text: str) -> WorldSetting:
         """Extract world setting from agent response."""
-        # Try to find JSON block with ```json ... ```
-        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if json_match:
-            raw = json_match.group(1)
-        else:
-            # Fallback: find raw JSON object
-            json_match = re.search(r'\{[\s\S]*"era"[\s\S]*"characters"[\s\S]*\}', text)
-            raw = json_match.group(0) if json_match else None
+        from agents.json_utils import extract_json_object
 
-        if raw:
-            data = json.loads(raw)
+        data = extract_json_object(text)
+
+        if data:
 
             # Parse entities
             entities = [Entity(**e) for e in data.get("entities", [])]
@@ -70,7 +66,10 @@ class WorldbuilderAgent:
             verbose=True,
         )
 
-        return str(crew.kickoff())
+        logger.info("WorldbuilderAgent: crew.kickoff() starting")
+        result = str(crew.kickoff())
+        logger.info("WorldbuilderAgent: crew.kickoff() done (%d chars)", len(result))
+        return result
 
     def build_world(self, context: StoryContext) -> WorldSetting:
         """Build world setting from story seed."""

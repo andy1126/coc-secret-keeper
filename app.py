@@ -2,7 +2,9 @@ import streamlit as st
 
 from models.story_context import StoryContext
 from llm.config import load_config, get_agent_config
+from llm.logging import setup_logging, CoCLLMLogger
 from llm.provider import get_llm_for_agent
+from ui.crew_progress import crew_progress
 
 
 def init_session():
@@ -74,30 +76,35 @@ def render_brainstorm_stage():
     user_input = st.chat_input("请输入你的想法...")
 
     if user_input:
-        # Add user message
         st.session_state.chat_history.append({"role": "user", "content": user_input})
 
-        # Get agent response
-        config = load_config()
-        llm_config = get_agent_config(config, "brainstorm")
-        llm = get_llm_for_agent(llm_config)
+        # 立刻显示用户消息
+        with st.chat_message("user"):
+            st.write(user_input)
 
-        from agents.brainstorm import BrainstormAgent
+        # assistant 气泡 + spinner
+        with st.chat_message("assistant"):
+            with st.spinner("思考中..."):
+                config = load_config()
+                llm_config = get_agent_config(config, "brainstorm")
+                llm = get_llm_for_agent(llm_config)
+                from agents.brainstorm import BrainstormAgent
 
-        agent = BrainstormAgent(llm)
+                agent = BrainstormAgent(llm)
+                # 恢复之前的对话历史（排除刚追加的当前用户消息，chat() 会自行追加）
+                agent.conversation_history = list(st.session_state.chat_history[:-1])
+                response = agent.chat(user_input, st.session_state.context)
+            st.write(response)
 
-        response = agent.chat(user_input, st.session_state.context)
-
-        # Add assistant message
         st.session_state.chat_history.append({"role": "assistant", "content": response})
+        st.rerun()
 
-        # Check if complete
-        if agent.is_complete(st.session_state.context):
-            st.success("故事构思完成！")
-            if st.button("进入世界观构建"):
-                st.session_state.stage = "world"
-                st.rerun()
-        else:
+    # 完成检查放在 user_input 块外，确保按钮在 rerun 后仍能渲染
+    required_keys = ["theme", "era", "atmosphere", "protagonist"]
+    if all(k in st.session_state.context.seed for k in required_keys):
+        st.success("故事构思完成！")
+        if st.button("进入世界观构建"):
+            st.session_state.stage = "world"
             st.rerun()
 
 
@@ -118,7 +125,7 @@ def render_world_stage():
 
         agent = WorldbuilderAgent(llm)
 
-        with st.spinner("AI 正在构建世界观..."):
+        with crew_progress("AI 正在构建世界观..."):
             agent.build_world(context)
 
         st.rerun()
@@ -176,7 +183,7 @@ def render_outline_stage():
 
             agent = OutlinerAgent(llm)
 
-            with st.spinner("AI 正在生成大纲..."):
+            with crew_progress("AI 正在生成大纲..."):
                 agent.create_outline(context, target_chapters)
 
             st.rerun()
@@ -204,28 +211,82 @@ def render_outline_stage():
                 st.rerun()
 
 
+def _write_review_one_chapter(writer, reviewer, context, chapter):
+    """Run write → review → revise loop for a single chapter.
+
+    Returns (chapter_text, pending_review_or_None).
+    If pending_review is not None, a major issue needs user decision.
+    """
+    with crew_progress(f"正在写作第{chapter.number}章..."):
+        chapter_text = writer.write_chapter(context, chapter)
+
+    max_revisions = 3
+    for revision in range(max_revisions):
+        with crew_progress(f"审核第{chapter.number}章（第{revision + 1}轮）..."):
+            review = reviewer.review_chapter(context, chapter.number, chapter_text)
+
+        if review.passed:
+            st.success(f"第{chapter.number}章审核通过！")
+            return chapter_text, None
+
+        major_issues = review.get_major_issues()
+        minor_issues = review.get_minor_issues()
+
+        if major_issues:
+            return chapter_text, review
+
+        if minor_issues:
+            if revision < max_revisions - 1:
+                st.info(f"第{revision + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中...")
+                with crew_progress("自动修订中..."):
+                    chapter_text = writer.revise_chapter(
+                        context, chapter, chapter_text, minor_issues
+                    )
+            else:
+                st.warning("3轮自动修订仍未通过，升级为需要用户决策")
+                return chapter_text, review
+
+    return chapter_text, None
+
+
+def _summarize_if_needed(writer, context, chapter_num):
+    """Generate summary for a chapter if it's missing.
+
+    Handles the case where a chapter was written but its summary was not
+    generated (e.g. major issue interrupted the flow).
+    """
+    idx = chapter_num - 1
+    if len(context.chapter_summaries) <= idx and idx < len(context.chapters):
+        chapter = context.outline[idx]
+        chapter_text = context.chapters[idx]
+        with crew_progress(f"正在生成第{chapter.number}章摘要..."):
+            summary = writer.summarize_chapter(chapter, chapter_text)
+        context.chapter_summaries.append(summary)
+
+
 def render_writing_stage():
     """Render writing stage UI.
 
-    Implements the revision loop from Design:
-    - Writer writes chapter -> Reviewer reviews
-    - Minor issues -> auto-revise (up to 3 rounds)
-    - Major issues or 3 rounds exhausted -> show to user for decision
+    Implements auto-advancing chapter writing:
+    - Click once to generate all chapters automatically
+    - Processes ONE chapter per Streamlit run cycle (avoids WebSocket timeout)
+    - Major issues pause for user decision, then resume
+    - After all chapters, auto-advance to final review
     """
     st.header("章节写作")
 
     context = st.session_state.context
 
-    # Initialize revision state
-    if "revision_round" not in st.session_state:
-        st.session_state.revision_round = 0
+    # Initialize state
     if "pending_review" not in st.session_state:
         st.session_state.pending_review = None
+    if "auto_writing_in_progress" not in st.session_state:
+        st.session_state.auto_writing_in_progress = False
 
     # Progress
     total_chapters = len(context.outline)
     completed = len(context.chapters)
-    st.progress(completed / total_chapters)
+    st.progress(completed / total_chapters if total_chapters else 0)
     st.write(f"进度: {completed}/{total_chapters} 章")
 
     # Handle pending major issues that need user decision
@@ -250,11 +311,11 @@ def render_writing_stage():
                 chapter_text = context.chapters[chapter_num - 1]
                 current_chapter = context.outline[chapter_num - 1]
 
-                with st.spinner("按建议修改中..."):
+                with crew_progress("按建议修改中..."):
                     writer.revise_chapter(context, current_chapter, chapter_text, review.issues)
 
+                _summarize_if_needed(writer, context, chapter_num)
                 st.session_state.pending_review = None
-                st.session_state.revision_round = 0
                 st.rerun()
         with col2:
             user_guidance = st.text_area("你的修改指导", key="user_guidance")
@@ -276,80 +337,74 @@ def render_writing_stage():
                         }
                     ]
 
-                    with st.spinner("按指导修改中..."):
+                    with crew_progress("按指导修改中..."):
                         writer.revise_chapter(context, current_chapter, chapter_text, custom_issues)
 
+                    _summarize_if_needed(writer, context, chapter_num)
                     st.session_state.pending_review = None
-                    st.session_state.revision_round = 0
                     st.rerun()
         with col3:
             if st.button("忽略，继续下一章"):
+                config = load_config()
+                writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+                from agents.writer import WriterAgent
+
+                writer = WriterAgent(writer_llm)
+                _summarize_if_needed(writer, context, chapter_num)
                 st.session_state.pending_review = None
-                st.session_state.revision_round = 0
                 st.rerun()
+        return
+
+    # Auto-writing: process ONE chapter per Streamlit run, then rerun
+    if st.session_state.auto_writing_in_progress and completed < total_chapters:
+        config = load_config()
+        writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+        review_llm = get_llm_for_agent(get_agent_config(config, "reviewer"))
+
+        from agents.writer import WriterAgent
+        from agents.reviewer import ReviewerAgent
+
+        writer = WriterAgent(writer_llm)
+        reviewer = ReviewerAgent(review_llm)
+
+        current_chapter = context.outline[completed]
+        st.subheader(f"正在写作: 第{current_chapter.number}章 {current_chapter.title}")
+
+        chapter_text, pending = _write_review_one_chapter(
+            writer, reviewer, context, current_chapter
+        )
+
+        if pending is not None:
+            st.session_state.pending_review = pending
+            st.session_state.pending_chapter_num = current_chapter.number
+            st.rerun()
+            return
+
+        # Generate summary for the completed chapter
+        with crew_progress(f"正在生成第{current_chapter.number}章摘要..."):
+            summary = writer.summarize_chapter(current_chapter, chapter_text)
+        context.chapter_summaries.append(summary)
+
+        # Check if all chapters done
+        if len(context.chapters) >= total_chapters:
+            st.session_state.auto_writing_in_progress = False
+            st.session_state.stage = "review"
+
+        # Rerun to update UI and process next chapter (or enter review)
+        st.rerun()
         return
 
     if completed < total_chapters:
         current_chapter = context.outline[completed]
-        st.subheader(f"正在写作: 第{current_chapter.number}章 {current_chapter.title}")
+        st.subheader(f"待写作: 第{current_chapter.number}章 {current_chapter.title}")
 
-        if st.button("生成章节"):
-            config = load_config()
-            writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
-            review_llm = get_llm_for_agent(get_agent_config(config, "reviewer"))
-
-            from agents.writer import WriterAgent
-            from agents.reviewer import ReviewerAgent
-
-            writer = WriterAgent(writer_llm)
-            reviewer = ReviewerAgent(review_llm)
-
-            with st.spinner(f"正在写作第{current_chapter.number}章..."):
-                chapter_text = writer.write_chapter(context, current_chapter)
-
-            # Revision loop: up to 3 rounds for minor issues
-            max_revisions = 3
-            for revision in range(max_revisions):
-                with st.spinner(f"审核中（第{revision + 1}轮）..."):
-                    review = reviewer.review_chapter(context, current_chapter.number, chapter_text)
-
-                if review.passed:
-                    st.success(f"第{current_chapter.number}章审核通过！")
-                    break
-
-                major_issues = review.get_major_issues()
-                minor_issues = review.get_minor_issues()
-
-                if major_issues:
-                    # Escalate to user
-                    st.session_state.pending_review = review
-                    st.session_state.pending_chapter_num = current_chapter.number
-                    st.rerun()
-                    return
-
-                if minor_issues:
-                    if revision < max_revisions - 1:
-                        st.info(
-                            f"第{revision + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中..."
-                        )
-                        with st.spinner("自动修订中..."):
-                            chapter_text = writer.revise_chapter(
-                                context, current_chapter, chapter_text, minor_issues
-                            )
-                    else:
-                        # 3 rounds exhausted, escalate
-                        st.warning("3轮自动修订仍未通过，升级为需要用户决策")
-                        st.session_state.pending_review = review
-                        st.session_state.pending_chapter_num = current_chapter.number
-                        st.rerun()
-                        return
-
+        if st.button("开始自动生成所有章节"):
+            st.session_state.auto_writing_in_progress = True
             st.rerun()
     else:
         st.success("所有章节写作完成！")
-        if st.button("进入终审"):
-            st.session_state.stage = "review"
-            st.rerun()
+        st.session_state.stage = "review"
+        st.rerun()
 
     # Display completed chapters
     for i, text in enumerate(context.chapters):
@@ -386,7 +441,9 @@ def render_review_stage():
 
         reviewer = ReviewerAgent(review_llm)
 
-        with st.spinner("Reviewer 正在进行全文终审（伏笔回收、角色弧线、氛围连贯、首尾呼应）..."):
+        with crew_progress(
+            "Reviewer 正在进行全文终审（伏笔回收、角色弧线、氛围连贯、首尾呼应）..."
+        ):
             review = reviewer.final_review(context)
 
         st.session_state.final_review_result = review
@@ -548,6 +605,12 @@ def main():
         layout="wide",
     )
 
+    import litellm
+
+    setup_logging()
+    if not any(isinstance(cb, CoCLLMLogger) for cb in litellm.callbacks):
+        litellm.callbacks.append(CoCLLMLogger())
+
     # Navigation
     st.sidebar.title("导航")
     page = st.sidebar.radio("选择页面", ["创作", "设置"])
@@ -556,7 +619,7 @@ def main():
         render_settings()
         return
 
-    st.title("🦑 CoC Story Generator")
+    st.title("🦑 CoC Secret Keeper")
     st.caption("克苏鲁神话小说生成器")
 
     init_session()

@@ -7,6 +7,7 @@ class StoryContext(BaseModel):
     world: WorldSetting | None = Field(default=None, description="世界观设定")
     outline: list[ChapterOutline] = Field(default_factory=list, description="章节大纲")
     chapters: list[str] = Field(default_factory=list, description="已生成章节正文")
+    chapter_summaries: list[str] = Field(default_factory=list, description="已完成章节的摘要")
     review_notes: list[str] = Field(default_factory=list, description="审核记录")
     current_stage: str = Field(default="brainstorm", description="当前阶段")
 

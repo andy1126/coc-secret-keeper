@@ -1,9 +1,11 @@
 import json
-import re
+import logging
 from crewai import Agent, Task, Crew
 
 from models.story_context import StoryContext
 from models.schemas import ChapterOutline
+
+logger = logging.getLogger("coc.llm")
 
 
 class OutlinerAgent:
@@ -19,15 +21,11 @@ class OutlinerAgent:
 
     def _extract_outline(self, text: str) -> list[ChapterOutline]:
         """Extract chapter outline from agent response."""
-        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if json_match:
-            raw = json_match.group(1)
-        else:
-            json_match = re.search(r'\{[\s\S]*"chapters"[\s\S]*\}', text)
-            raw = json_match.group(0) if json_match else None
+        from agents.json_utils import extract_json_object
 
-        if raw:
-            data = json.loads(raw)
+        data = extract_json_object(text)
+
+        if data:
             chapters = [ChapterOutline(**c) for c in data.get("chapters", [])]
             return chapters
 
@@ -55,7 +53,10 @@ class OutlinerAgent:
             verbose=True,
         )
 
-        return str(crew.kickoff())
+        logger.info("OutlinerAgent: crew.kickoff() starting")
+        result = str(crew.kickoff())
+        logger.info("OutlinerAgent: crew.kickoff() done (%d chars)", len(result))
+        return result
 
     def create_outline(
         self,

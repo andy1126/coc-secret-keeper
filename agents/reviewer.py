@@ -1,8 +1,10 @@
 import json
-import re
+import logging
 from crewai import Agent, Task, Crew
 
 from models.story_context import StoryContext
+
+logger = logging.getLogger("coc.llm")
 
 
 class ReviewResult:
@@ -34,15 +36,11 @@ class ReviewerAgent:
 
     def _extract_review(self, text: str) -> ReviewResult:
         """Extract review result from agent response."""
-        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if json_match:
-            raw = json_match.group(1)
-        else:
-            json_match = re.search(r'\{[\s\S]*"passed"[\s\S]*\}', text)
-            raw = json_match.group(0) if json_match else None
+        from agents.json_utils import extract_json_object
 
-        if raw:
-            data = json.loads(raw)
+        data = extract_json_object(text)
+
+        if data:
             return ReviewResult(data)
 
         raise ValueError("Could not extract review from response")
@@ -69,7 +67,10 @@ class ReviewerAgent:
             verbose=True,
         )
 
-        return str(crew.kickoff())
+        logger.info("ReviewerAgent: crew.kickoff() starting")
+        result = str(crew.kickoff())
+        logger.info("ReviewerAgent: crew.kickoff() done (%d chars)", len(result))
+        return result
 
     def review_chapter(
         self,
@@ -85,7 +86,13 @@ class ReviewerAgent:
         if context.outline and chapter_number <= len(context.outline):
             chapter_outline = context.outline[chapter_number - 1].model_dump()
 
-        previous_text = "\n\n".join(context.chapters) if context.chapters else "无"
+        previous_text = (
+            "\n\n".join(
+                f"第{i+1}章摘要:\n{summary}" for i, summary in enumerate(context.chapter_summaries)
+            )
+            if context.chapter_summaries
+            else "无"
+        )
 
         task_desc = f"""
 Review chapter {chapter_number}.
@@ -102,6 +109,12 @@ Previous Chapters:
 Chapter to Review:
 {chapter_text}
 
+IMPORTANT: Check for completeness issues:
+1. Does the chapter cover ALL plot points in the outline summary?
+2. Are all foreshadowing/payoff items from the outline addressed?
+3. Is the text complete -- does it end with a proper sentence, or truncated mid-sentence?
+If truncated or missing outline content, report as category "completeness" with severity "major".
+
 Provide a complete review following the format in your instructions.
 """
 
@@ -116,36 +129,46 @@ Provide a complete review following the format in your instructions.
         return review
 
     def final_review(self, context: StoryContext) -> ReviewResult:
-        """Perform full-text final review after all chapters are complete.
+        """Perform summary-based macro review after all chapters are complete.
 
         Checks: foreshadowing payoffs, character arcs, atmosphere
-        consistency, ending echoes opening.
+        consistency, ending echoes opening. Uses chapter summaries
+        instead of full text since per-chapter reviews already handled details.
         """
+        if len(context.chapter_summaries) != len(context.chapters):
+            raise ValueError(
+                f"chapter_summaries ({len(context.chapter_summaries)}) "
+                f"!= chapters ({len(context.chapters)}): "
+                "all chapters must be summarized before final review"
+            )
+
         world_dict = context.world.model_dump() if context.world else {}
         outline_dict = [ch.model_dump() for ch in context.outline]
 
-        full_text = "\n\n".join(
-            f"第{i+1}章: {context.outline[i].title}\n{text}"
-            for i, text in enumerate(context.chapters)
+        summaries_text = "\n\n".join(
+            f"第{i+1}章「{context.outline[i].title}」摘要:\n{summary}"
+            for i, summary in enumerate(context.chapter_summaries)
         )
 
         task_description = f"""
-Perform a FINAL full-text review of the complete story.
+对完整故事进行终审（宏观审查）。
 
-World Setting:
+世界观设定:
 {json.dumps(world_dict, ensure_ascii=False, indent=2)}
 
-Outline:
+大纲:
 {json.dumps(outline_dict, ensure_ascii=False, indent=2)}
 
-Full Text:
-{full_text}
+各章摘要:
+{summaries_text}
 
-Check the following specifically:
-1. 所有伏笔是否都已回收
-2. 所有角色弧线是否完整
-3. 整体氛围是否连贯一致
-4. 结局是否呼应开篇
+请只检查以下宏观问题：
+1. 所有伏笔是否都已回收——对照大纲中的 foreshadowing/payoffs 列表逐一核实
+2. 所有角色弧线是否完整——每个角色是否走完了大纲规划的弧线
+3. 整体氛围是否连贯一致——各章情绪基调是否符合大纲 mood 并形成递进
+4. 结局是否呼应开篇——首尾是否形成呼应
+
+请不要检查措辞、语法或单段落的氛围细节——这些已在逐章审核中处理。
 
 Provide a complete review following the format in your instructions.
 """

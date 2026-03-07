@@ -1,8 +1,11 @@
 import json
+import logging
 from crewai import Agent, Task, Crew
 
 from models.story_context import StoryContext
 from models.schemas import ChapterOutline
+
+logger = logging.getLogger("coc.llm")
 
 
 class WriterAgent:
@@ -38,7 +41,10 @@ class WriterAgent:
             verbose=True,
         )
 
-        return str(crew.kickoff())
+        logger.info("WriterAgent: crew.kickoff() starting")
+        result = str(crew.kickoff())
+        logger.info("WriterAgent: crew.kickoff() done (%d chars)", len(result))
+        return result
 
     def write_chapter(
         self,
@@ -50,8 +56,10 @@ class WriterAgent:
         outline_dict = chapter.model_dump()
 
         previous_chapters = (
-            "\n\n".join(f"Chapter {i+1}:\n{text}" for i, text in enumerate(context.chapters))
-            if context.chapters
+            "\n\n".join(
+                f"第{i+1}章摘要:\n{summary}" for i, summary in enumerate(context.chapter_summaries)
+            )
+            if context.chapter_summaries
             else "无"
         )
 
@@ -76,6 +84,24 @@ Include payoffs: {chapter.payoffs}
         result = self._run_agent(task_desc)
         context.chapters.append(result)
         return result
+
+    def summarize_chapter(self, chapter: ChapterOutline, chapter_text: str) -> str:
+        """Generate a 200-300 word Chinese summary for a completed chapter."""
+        task_desc = f"""
+为第{chapter.number}章「{chapter.title}」撰写一段200-300字的中文摘要。
+
+章节正文：
+{chapter_text}
+
+摘要需涵盖：
+1. 主要情节推进（发生了什么关键事件）
+2. 角色状态变化（心理、关系、处境）
+3. 伏笔与回收（本章埋设或回收了哪些线索）
+4. 结尾状态（章末人物/局面停留在什么状态）
+
+只输出摘要文本，不要加标题或额外格式。
+"""
+        return self._run_agent(task_desc)
 
     def revise_chapter(
         self,

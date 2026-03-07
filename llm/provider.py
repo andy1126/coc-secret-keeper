@@ -17,7 +17,7 @@ def create_llm(
             model=f"anthropic/{model or 'claude-sonnet-4-6-20250514'}",
             api_key=api_key,
             base_url=base_url,
-            max_tokens=4096,
+            max_tokens=8000,
             **kwargs,
         )
     elif type == "openai_compatible":
