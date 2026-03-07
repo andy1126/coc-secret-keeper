@@ -19,7 +19,7 @@ class OutlinerAgent:
 
     def _extract_outline(self, text: str) -> list[ChapterOutline]:
         """Extract chapter outline from agent response."""
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
         if json_match:
             raw = json_match.group(1)
         else:
@@ -28,9 +28,7 @@ class OutlinerAgent:
 
         if raw:
             data = json.loads(raw)
-            chapters = [
-                ChapterOutline(**c) for c in data.get("chapters", [])
-            ]
+            chapters = [ChapterOutline(**c) for c in data.get("chapters", [])]
             return chapters
 
         raise ValueError("Could not extract outline from response")

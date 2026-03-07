@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import Mock, patch
 from agents.writer import WriterAgent
 from models.story_context import StoryContext
@@ -20,7 +19,16 @@ def test_write_chapter():
     context.world = WorldSetting(
         era="1920s",
         locations=["阿卡姆"],
-        characters=[Character(name="张三", background="学者", personality="好奇", motivation="求知", arc="堕落", relationships=[])],
+        characters=[
+            Character(
+                name="张三",
+                background="学者",
+                personality="好奇",
+                motivation="求知",
+                arc="堕落",
+                relationships=[],
+            )
+        ],
     )
 
     chapter_outline = ChapterOutline(
@@ -35,7 +43,7 @@ def test_write_chapter():
 
     mock_result = "张三拿起那本古老的书...（省略）"
 
-    with patch.object(agent, '_run_agent', return_value=mock_result):
+    with patch.object(agent, "_run_agent", return_value=mock_result):
         chapter = agent.write_chapter(context, chapter_outline)
 
     assert chapter == mock_result

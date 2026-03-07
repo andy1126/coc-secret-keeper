@@ -26,7 +26,7 @@ class BrainstormAgent:
     def _extract_seed(self, text: str) -> dict:
         """Extract JSON seed from agent response."""
         # Try to find JSON block
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
         if json_match:
             return json.loads(json_match.group(1))
 
@@ -47,7 +47,10 @@ class BrainstormAgent:
         messages = [
             {"role": "system", "content": self.prompt},
             *self.conversation_history,
-            {"role": "user", "content": f"\n\n当前已收集的故事种子: {json.dumps(context.seed, ensure_ascii=False)}"},
+            {
+                "role": "user",
+                "content": f"\n\n当前已收集的故事种子: {json.dumps(context.seed, ensure_ascii=False)}",
+            },
         ]
 
         result_text = self.llm.call(messages=messages)

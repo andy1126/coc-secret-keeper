@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import Mock, patch
 from agents.outliner import OutlinerAgent
 from models.story_context import StoryContext
@@ -31,7 +30,7 @@ def test_create_outline():
 ```
 """
 
-    with patch.object(agent, '_run_agent', return_value=mock_result):
+    with patch.object(agent, "_run_agent", return_value=mock_result):
         outline = agent.create_outline(context, target_chapters=6)
 
     assert len(outline) == 1

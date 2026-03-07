@@ -1,6 +1,5 @@
 import os
-import pytest
-from llm.config import load_config, Config
+from llm.config import load_config
 
 
 def test_config_loading():

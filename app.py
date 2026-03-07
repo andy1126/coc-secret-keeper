@@ -1,5 +1,4 @@
 import streamlit as st
-import json
 
 from models.story_context import StoryContext
 from llm.config import load_config, get_agent_config
@@ -84,6 +83,7 @@ def render_brainstorm_stage():
         llm = get_llm_for_agent(llm_config)
 
         from agents.brainstorm import BrainstormAgent
+
         agent = BrainstormAgent(llm)
 
         response = agent.chat(user_input, st.session_state.context)
@@ -115,10 +115,11 @@ def render_world_stage():
         llm = get_llm_for_agent(llm_config)
 
         from agents.worldbuilder import WorldbuilderAgent
+
         agent = WorldbuilderAgent(llm)
 
         with st.spinner("AI 正在构建世界观..."):
-            world = agent.build_world(context)
+            agent.build_world(context)
 
         st.rerun()
     else:
@@ -172,6 +173,7 @@ def render_outline_stage():
             llm = get_llm_for_agent(llm_config)
 
             from agents.outliner import OutlinerAgent
+
             agent = OutlinerAgent(llm)
 
             with st.spinner("AI 正在生成大纲..."):
@@ -242,6 +244,7 @@ def render_writing_stage():
                 config = load_config()
                 writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
                 from agents.writer import WriterAgent
+
                 writer = WriterAgent(writer_llm)
 
                 chapter_text = context.chapters[chapter_num - 1]
@@ -260,11 +263,18 @@ def render_writing_stage():
                     config = load_config()
                     writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
                     from agents.writer import WriterAgent
+
                     writer = WriterAgent(writer_llm)
 
                     chapter_text = context.chapters[chapter_num - 1]
                     current_chapter = context.outline[chapter_num - 1]
-                    custom_issues = [{"category": "user", "description": user_guidance, "suggestion": user_guidance}]
+                    custom_issues = [
+                        {
+                            "category": "user",
+                            "description": user_guidance,
+                            "suggestion": user_guidance,
+                        }
+                    ]
 
                     with st.spinner("按指导修改中..."):
                         writer.revise_chapter(context, current_chapter, chapter_text, custom_issues)
@@ -290,6 +300,7 @@ def render_writing_stage():
 
             from agents.writer import WriterAgent
             from agents.reviewer import ReviewerAgent
+
             writer = WriterAgent(writer_llm)
             reviewer = ReviewerAgent(review_llm)
 
@@ -300,9 +311,7 @@ def render_writing_stage():
             max_revisions = 3
             for revision in range(max_revisions):
                 with st.spinner(f"审核中（第{revision + 1}轮）..."):
-                    review = reviewer.review_chapter(
-                        context, current_chapter.number, chapter_text
-                    )
+                    review = reviewer.review_chapter(context, current_chapter.number, chapter_text)
 
                 if review.passed:
                     st.success(f"第{current_chapter.number}章审核通过！")
@@ -320,7 +329,9 @@ def render_writing_stage():
 
                 if minor_issues:
                     if revision < max_revisions - 1:
-                        st.info(f"第{revision + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中...")
+                        st.info(
+                            f"第{revision + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中..."
+                        )
                         with st.spinner("自动修订中..."):
                             chapter_text = writer.revise_chapter(
                                 context, current_chapter, chapter_text, minor_issues
@@ -372,6 +383,7 @@ def render_review_stage():
         review_llm = get_llm_for_agent(get_agent_config(config, "reviewer"))
 
         from agents.reviewer import ReviewerAgent
+
         reviewer = ReviewerAgent(review_llm)
 
         with st.spinner("Reviewer 正在进行全文终审（伏笔回收、角色弧线、氛围连贯、首尾呼应）..."):
@@ -496,8 +508,10 @@ def render_settings():
 
         st.success("设置已保存到 config.yaml")
 
-    st.info("配置优先级: 环境变量 > config.yaml > UI 设置页。\n"
-            "环境变量: COC_OPENAI_API_KEY, COC_ANTHROPIC_API_KEY")
+    st.info(
+        "配置优先级: 环境变量 > config.yaml > UI 设置页。\n"
+        "环境变量: COC_OPENAI_API_KEY, COC_ANTHROPIC_API_KEY"
+    )
 
 
 def main():

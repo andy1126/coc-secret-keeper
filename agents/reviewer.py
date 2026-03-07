@@ -34,7 +34,7 @@ class ReviewerAgent:
 
     def _extract_review(self, text: str) -> ReviewResult:
         """Extract review result from agent response."""
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
         if json_match:
             raw = json_match.group(1)
         else:

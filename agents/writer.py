@@ -49,10 +49,11 @@ class WriterAgent:
         world_dict = context.world.model_dump() if context.world else {}
         outline_dict = chapter.model_dump()
 
-        previous_chapters = "\n\n".join(
-            f"Chapter {i+1}:\n{text}"
-            for i, text in enumerate(context.chapters)
-        ) if context.chapters else "无"
+        previous_chapters = (
+            "\n\n".join(f"Chapter {i+1}:\n{text}" for i, text in enumerate(context.chapters))
+            if context.chapters
+            else "无"
+        )
 
         task_desc = f"""
 Write chapter {chapter.number}: "{chapter.title}"
@@ -85,8 +86,7 @@ Include payoffs: {chapter.payoffs}
     ) -> str:
         """Revise a chapter based on review feedback."""
         issues_desc = "\n".join(
-            f"- [{i['category']}] {i['description']} → 建议: {i['suggestion']}"
-            for i in issues
+            f"- [{i['category']}] {i['description']} → 建议: {i['suggestion']}" for i in issues
         )
 
         task_desc = f"""

@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import Mock, patch
 from agents.reviewer import ReviewerAgent
 from models.story_context import StoryContext
@@ -18,7 +17,15 @@ def test_review_chapter():
     context = StoryContext()
     context.seed = {"theme": "调查"}
     context.outline = [
-        ChapterOutline(number=1, title="开端", summary="开始", mood="悬疑", word_target=1000, foreshadowing=[], payoffs=[])
+        ChapterOutline(
+            number=1,
+            title="开端",
+            summary="开始",
+            mood="悬疑",
+            word_target=1000,
+            foreshadowing=[],
+            payoffs=[],
+        )
     ]
 
     mock_result = """
@@ -34,7 +41,7 @@ def test_review_chapter():
 ```
 """
 
-    with patch.object(agent, '_run_agent', return_value=mock_result):
+    with patch.object(agent, "_run_agent", return_value=mock_result):
         result = agent.review_chapter(context, chapter_number=1, chapter_text="测试文本")
 
     assert not result.passed

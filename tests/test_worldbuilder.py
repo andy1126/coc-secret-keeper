@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import Mock, patch
 from agents.worldbuilder import WorldbuilderAgent
 from models.story_context import StoryContext
@@ -15,11 +14,7 @@ def test_build_world():
     mock_llm = Mock()
     agent = WorldbuilderAgent(llm=mock_llm)
 
-    context = StoryContext(seed={
-        "theme": "调查",
-        "era": "1920年代",
-        "atmosphere": "心理恐怖"
-    })
+    context = StoryContext(seed={"theme": "调查", "era": "1920年代", "atmosphere": "心理恐怖"})
 
     # Mock the crew result
     mock_result = """
@@ -35,7 +30,7 @@ def test_build_world():
 ```
 """
 
-    with patch.object(agent, '_run_agent', return_value=mock_result):
+    with patch.object(agent, "_run_agent", return_value=mock_result):
         world = agent.build_world(context)
 
     assert isinstance(world, WorldSetting)

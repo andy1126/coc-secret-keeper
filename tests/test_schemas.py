@@ -1,4 +1,3 @@
-import pytest
 from models.schemas import Character, Entity, WorldSetting, ChapterOutline
 
 
@@ -31,7 +30,16 @@ def test_world_setting_creation():
         entities=[Entity(name="古老者", description="外星生物", influence="梦境")],
         forbidden_knowledge="人类并非万物之主",
         rules=["不可直视古神", "知识带来疯狂"],
-        characters=[Character(name="张三", background="学者", personality="好奇", motivation="求知", arc="堕落", relationships=[])],
+        characters=[
+            Character(
+                name="张三",
+                background="学者",
+                personality="好奇",
+                motivation="求知",
+                arc="堕落",
+                relationships=[],
+            )
+        ],
     )
     assert len(world.locations) == 2
     assert len(world.characters) == 1

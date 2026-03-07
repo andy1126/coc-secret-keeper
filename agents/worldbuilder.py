@@ -20,7 +20,7 @@ class WorldbuilderAgent:
     def _extract_world(self, text: str) -> WorldSetting:
         """Extract world setting from agent response."""
         # Try to find JSON block with ```json ... ```
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
         if json_match:
             raw = json_match.group(1)
         else:
@@ -32,14 +32,10 @@ class WorldbuilderAgent:
             data = json.loads(raw)
 
             # Parse entities
-            entities = [
-                Entity(**e) for e in data.get("entities", [])
-            ]
+            entities = [Entity(**e) for e in data.get("entities", [])]
 
             # Parse characters
-            characters = [
-                Character(**c) for c in data.get("characters", [])
-            ]
+            characters = [Character(**c) for c in data.get("characters", [])]
 
             return WorldSetting(
                 era=data["era"],

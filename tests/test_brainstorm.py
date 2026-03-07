@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from agents.brainstorm import BrainstormAgent
 from models.story_context import StoryContext
 
@@ -15,7 +14,7 @@ def test_extract_seed_from_json():
     mock_llm = Mock()
     agent = BrainstormAgent(llm=mock_llm)
 
-    json_str = '''{"theme": "调查", "era": "1920s"}'''
+    json_str = """{"theme": "调查", "era": "1920s"}"""
     result = agent._extract_seed(json_str)
 
     assert result["theme"] == "调查"
