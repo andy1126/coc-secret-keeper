@@ -32,3 +32,4 @@ ENV/
 outputs/
 *.txt
 !requirements.txt
+config.yaml
