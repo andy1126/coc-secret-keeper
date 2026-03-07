@@ -1,0 +1,22 @@
+llm:
+  default_provider: openai
+  providers:
+    openai:
+      api_key: ""
+      base_url: "https://api.openai.com/v1"
+      model: "gpt-4o"
+    anthropic:
+      api_key: ""
+      model: "claude-sonnet-4-6-20250514"
+
+agents:
+  brainstorm:
+    provider: anthropic
+  worldbuilder:
+    provider: openai
+  outliner:
+    provider: openai
+  writer:
+    provider: anthropic
+  reviewer:
+    provider: anthropic
