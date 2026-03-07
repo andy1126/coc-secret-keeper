@@ -25,6 +25,10 @@ def load_config(path: str = "config.yaml") -> Config:
         if env_base_url:
             provider_config["base_url"] = env_base_url
 
+        env_model = os.getenv(f"COC_{provider_name.upper()}_MODEL")
+        if env_model:
+            provider_config["model"] = env_model
+
     return Config(
         llm=data.get("llm", {}),
         agents=data.get("agents", {}),
@@ -39,6 +43,7 @@ def get_agent_config(config: Config, agent_name: str) -> dict[str, Any]:
 
     return {
         "provider": provider_name,
+        "type": provider_config.get("type", "openai_compatible"),
         "api_key": provider_config.get("api_key"),
         "base_url": provider_config.get("base_url"),
         "model": provider_config.get("model"),

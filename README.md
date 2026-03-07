@@ -1,4 +1,4 @@
-# CoC Story Generator
+# CoC Secret Keeper
 
 克苏鲁神话小说生成器 - 多智能体协作的故事创作工具。
 

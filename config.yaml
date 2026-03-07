@@ -1,22 +1,24 @@
-llm:
-  default_provider: openai
-  providers:
-    openai:
-      api_key: ""
-      base_url: "https://api.openai.com/v1"
-      model: "gpt-4o"
-    anthropic:
-      api_key: ""
-      model: "claude-sonnet-4-6-20250514"
-
 agents:
   brainstorm:
-    provider: anthropic
-  worldbuilder:
-    provider: openai
+    provider: anthropic_api
   outliner:
-    provider: openai
-  writer:
-    provider: anthropic
+    provider: anthropic_api
   reviewer:
-    provider: anthropic
+    provider: anthropic_api
+  worldbuilder:
+    provider: anthropic_api
+  writer:
+    provider: anthropic_api
+llm:
+  default_provider: anthropic_api
+  providers:
+    anthropic_api:
+      api_key: sk-16ae452e12984b38abe6a4377f8cb8e6
+      base_url: https://api.deepseek.com/anthropic
+      model: deepseek-reasoner
+      type: anthropic_compatible
+    openai_api:
+      api_key: ''
+      base_url: https://api.openai.com/v1
+      model: gpt-4o
+      type: openai_compatible

@@ -447,61 +447,87 @@ def render_settings():
 
     # Load current config
     config = load_config()
+    providers = config.llm.get("providers", {})
+    provider_names = list(providers.keys())
+    type_options = ["openai_compatible", "anthropic_compatible"]
+    agent_names = ["brainstorm", "worldbuilder", "outliner", "writer", "reviewer"]
 
-    st.subheader("LLM 配置")
+    st.subheader("LLM Provider 配置")
 
-    # OpenAI
-    with st.expander("OpenAI"):
-        openai_key = st.text_input(
-            "API Key",
-            value=config.llm.get("providers", {}).get("openai", {}).get("api_key", ""),
-            type="password",
-            key="openai_key",
-        )
-        openai_model = st.selectbox(
-            "Model",
-            ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-            index=0,
-            key="openai_model",
-        )
+    # Collect edits per provider
+    provider_edits = {}
+    for name in provider_names:
+        pcfg = providers[name]
+        with st.expander(name):
+            p_type = st.selectbox(
+                "Type",
+                type_options,
+                index=type_options.index(pcfg.get("type", "openai_compatible")),
+                key=f"type_{name}",
+            )
+            p_base_url = st.text_input(
+                "Base URL",
+                value=pcfg.get("base_url", ""),
+                key=f"base_url_{name}",
+            )
+            p_api_key = st.text_input(
+                "API Key",
+                value=pcfg.get("api_key", ""),
+                type="password",
+                key=f"api_key_{name}",
+            )
+            p_model = st.text_input(
+                "Model",
+                value=pcfg.get("model", ""),
+                key=f"model_{name}",
+            )
+            provider_edits[name] = {
+                "type": p_type,
+                "base_url": p_base_url,
+                "api_key": p_api_key,
+                "model": p_model,
+            }
 
-    # Anthropic
-    with st.expander("Anthropic"):
-        anthropic_key = st.text_input(
-            "API Key",
-            value=config.llm.get("providers", {}).get("anthropic", {}).get("api_key", ""),
-            type="password",
-            key="anthropic_key",
-        )
-        anthropic_model = st.selectbox(
-            "Model",
-            ["claude-sonnet-4-6-20250514", "claude-opus-4-6", "claude-haiku-4-5-20251001"],
-            index=0,
-            key="anthropic_model",
+    st.subheader("Default Provider")
+    default_provider = st.selectbox(
+        "Default Provider",
+        provider_names,
+        index=(
+            provider_names.index(config.llm.get("default_provider", provider_names[0]))
+            if config.llm.get("default_provider") in provider_names
+            else 0
+        ),
+        key="default_provider",
+    )
+
+    st.subheader("Agent Provider 分配")
+    agent_edits = {}
+    for agent in agent_names:
+        current = config.agents.get(agent, {}).get("provider", default_provider)
+        agent_edits[agent] = st.selectbox(
+            f"{agent.capitalize()} Agent",
+            provider_names,
+            index=provider_names.index(current) if current in provider_names else 0,
+            key=f"agent_{agent}",
         )
 
     if st.button("保存设置"):
         import os
         import yaml
 
-        # Save to environment for current session
-        if openai_key:
-            os.environ["COC_OPENAI_API_KEY"] = openai_key
-        if anthropic_key:
-            os.environ["COC_ANTHROPIC_API_KEY"] = anthropic_key
+        # Save api keys to environment for current session
+        for name, edits in provider_edits.items():
+            if edits["api_key"]:
+                os.environ[f"COC_{name.upper()}_API_KEY"] = edits["api_key"]
 
         # Persist to config.yaml
         config_path = "config.yaml"
         with open(config_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
 
-        data.setdefault("llm", {}).setdefault("providers", {})
-        if openai_key:
-            data["llm"]["providers"].setdefault("openai", {})["api_key"] = openai_key
-        data["llm"]["providers"].setdefault("openai", {})["model"] = openai_model
-        if anthropic_key:
-            data["llm"]["providers"].setdefault("anthropic", {})["api_key"] = anthropic_key
-        data["llm"]["providers"].setdefault("anthropic", {})["model"] = anthropic_model
+        data.setdefault("llm", {})["default_provider"] = default_provider
+        data["llm"]["providers"] = provider_edits
+        data["agents"] = {agent: {"provider": prov} for agent, prov in agent_edits.items()}
 
         with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
@@ -510,7 +536,7 @@ def render_settings():
 
     st.info(
         "配置优先级: 环境变量 > config.yaml > UI 设置页。\n"
-        "环境变量: COC_OPENAI_API_KEY, COC_ANTHROPIC_API_KEY"
+        "环境变量: COC_{NAME}_API_KEY, COC_{NAME}_BASE_URL, COC_{NAME}_MODEL"
     )
 
 
