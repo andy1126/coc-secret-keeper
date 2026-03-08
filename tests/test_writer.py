@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 from agents.writer import WriterAgent
 from models.story_context import StoryContext
-from models.schemas import ChapterOutline, WorldSetting, Character
+from models.schemas import ChapterOutline, WorldSetting, Character, Location
 
 
 def test_writer_creation():
@@ -18,7 +18,7 @@ def test_write_chapter():
     context.seed = {"theme": "调查"}
     context.world = WorldSetting(
         era="1920s",
-        locations=["阿卡姆"],
+        locations=[Location(name="阿卡姆", description="小镇")],
         characters=[
             Character(
                 name="张三",
@@ -65,7 +65,7 @@ def test_write_chapter_first_chapter():
     context.seed = {"theme": "调查"}
     context.world = WorldSetting(
         era="1920s",
-        locations=["阿卡姆"],
+        locations=[Location(name="阿卡姆", description="小镇")],
         characters=[],
     )
 

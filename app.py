@@ -34,7 +34,7 @@ def render_sidebar():
         if context.world:
             st.subheader("世界观")
             st.write(f"时代: {context.world.era}")
-            st.write(f"地点: {', '.join(context.world.locations[:3])}")
+            st.write(f"地点: {', '.join(loc.name for loc in context.world.locations[:3])}")
 
         # Character list
         if context.world and context.world.characters:
@@ -179,7 +179,7 @@ def render_world_stage():
 
         st.subheader("地点")
         for loc in context.world.locations:
-            st.write(f"- {loc}")
+            st.write(f"- **{loc.name}**: {loc.description}")
 
         st.subheader("神话实体")
         for entity in context.world.entities:

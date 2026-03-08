@@ -1,4 +1,4 @@
-from models.schemas import Character, Entity, WorldSetting, ChapterOutline
+from models.schemas import Character, Entity, Location, WorldSetting, ChapterOutline
 
 
 def test_character_creation():
@@ -26,7 +26,10 @@ def test_entity_creation():
 def test_world_setting_creation():
     world = WorldSetting(
         era="1920年代",
-        locations=["阿卡姆镇", "密斯卡托尼克大学"],
+        locations=[
+            Location(name="阿卡姆镇", description="新英格兰的小镇"),
+            Location(name="密斯卡托尼克大学", description="藏有禁书的学府"),
+        ],
         entities=[Entity(name="古老者", description="外星生物", influence="梦境")],
         forbidden_knowledge="人类并非万物之主",
         rules=["不可直视古神", "知识带来疯狂"],
@@ -42,6 +45,7 @@ def test_world_setting_creation():
         ],
     )
     assert len(world.locations) == 2
+    assert world.locations[0].name == "阿卡姆镇"
     assert len(world.characters) == 1
 
 

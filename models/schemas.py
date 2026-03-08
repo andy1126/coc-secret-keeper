@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Character(BaseModel):
@@ -10,6 +10,11 @@ class Character(BaseModel):
     relationships: list[str] = Field(default_factory=list, description="人物关系")
 
 
+class Location(BaseModel):
+    name: str = Field(description="地点名称")
+    description: str = Field(description="地点描述")
+
+
 class Entity(BaseModel):
     name: str = Field(description="神话实体名称")
     description: str = Field(description="实体描述")
@@ -18,11 +23,29 @@ class Entity(BaseModel):
 
 class WorldSetting(BaseModel):
     era: str = Field(description="故事时代背景")
-    locations: list[str] = Field(default_factory=list, description="故事地点")
+    locations: list[Location] = Field(default_factory=list, description="故事地点")
     entities: list[Entity] = Field(default_factory=list, description="神话实体")
     forbidden_knowledge: str = Field(default="", description="禁忌知识")
     rules: list[str] = Field(default_factory=list, description="世界观规则")
     characters: list[Character] = Field(default_factory=list, description="角色列表")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_locations(cls, data):
+        """Convert string locations to Location objects for backward compatibility."""
+        if isinstance(data, dict) and "locations" in data:
+            locations = data["locations"]
+            if isinstance(locations, list):
+                normalized = []
+                for loc in locations:
+                    if isinstance(loc, str):
+                        normalized.append({"name": loc, "description": ""})
+                    elif isinstance(loc, dict):
+                        normalized.append(loc)
+                    elif isinstance(loc, Location):
+                        normalized.append(loc)
+                data["locations"] = normalized
+        return data
 
 
 class ChapterOutline(BaseModel):

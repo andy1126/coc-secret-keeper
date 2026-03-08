@@ -3,7 +3,7 @@ import logging
 from crewai import Agent, Task, Crew
 
 from models.story_context import StoryContext
-from models.schemas import WorldSetting, Character, Entity
+from models.schemas import WorldSetting, Character, Entity, Location
 
 logger = logging.getLogger("coc.llm")
 
@@ -26,6 +26,13 @@ class WorldbuilderAgent:
         data = extract_json_object(text)
 
         if data:
+            # Parse locations (handle both string and dict formats)
+            locations = []
+            for loc in data.get("locations", []):
+                if isinstance(loc, str):
+                    locations.append(Location(name=loc, description=""))
+                elif isinstance(loc, dict):
+                    locations.append(Location(**loc))
 
             # Parse entities
             entities = [Entity(**e) for e in data.get("entities", [])]
@@ -35,7 +42,7 @@ class WorldbuilderAgent:
 
             return WorldSetting(
                 era=data["era"],
-                locations=data.get("locations", []),
+                locations=locations,
                 entities=entities,
                 forbidden_knowledge=data.get("forbidden_knowledge", ""),
                 rules=data.get("rules", []),
