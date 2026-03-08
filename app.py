@@ -65,7 +65,7 @@ def render_sidebar():
 def render_brainstorm_stage():
     """Render brainstorm stage UI."""
     st.header("故事构思")
-    st.write("让我们开始构思你的克苏鲁故事。请回答以下问题...")
+    st.write("你好！我是你的克苏鲁故事创作助手。我会在接下来的对话中引导你构思故事，一次问你一个问题。请告诉我你想创作什么样的故事，或者输入'开始'让我来引导你。")
 
     # Chat interface
     for msg in st.session_state.chat_history:
@@ -100,9 +100,48 @@ def render_brainstorm_stage():
         st.rerun()
 
     # 完成检查放在 user_input 块外，确保按钮在 rerun 后仍能渲染
-    required_keys = ["theme", "era", "atmosphere", "protagonist"]
+    required_keys = ["theme", "era", "atmosphere", "protagonist", "writing_style"]
     if all(k in st.session_state.context.seed for k in required_keys):
         st.success("故事构思完成！")
+
+        # Seed编辑区域
+        with st.expander("编辑故事种子", expanded=False):
+            seed = st.session_state.context.seed
+
+            col1, col2 = st.columns(2)
+            with col1:
+                theme = st.text_input("主题", value=seed.get("theme", ""))
+                era = st.text_input("时代背景", value=seed.get("era", ""))
+                atmosphere = st.text_input("氛围", value=seed.get("atmosphere", ""))
+            with col2:
+                mythos = st.text_area("神话元素 (用逗号分隔)", value=", ".join(seed.get("mythos_elements", [])))
+                writing_style_style = st.selectbox(
+                    "文风",
+                    ["朴实", "华丽"],
+                    index=0 if seed.get("writing_style", {}).get("style", "朴实") == "朴实" else 1
+                )
+                writing_style_narration = st.selectbox(
+                    "叙事方式",
+                    ["描写为主", "对话为主"],
+                    index=0 if seed.get("writing_style", {}).get("narration", "描写为主") == "描写为主" else 1
+                )
+
+            notes = st.text_area("其他备注", value=seed.get("notes", ""))
+
+            if st.button("保存修改"):
+                st.session_state.context.seed["theme"] = theme
+                st.session_state.context.seed["era"] = era
+                st.session_state.context.seed["atmosphere"] = atmosphere
+                st.session_state.context.seed["mythos_elements"] = [e.strip() for e in mythos.split(",") if e.strip()]
+                st.session_state.context.seed["notes"] = notes
+                st.session_state.context.seed["writing_style"] = {
+                    "style": writing_style_style,
+                    "narration": writing_style_narration,
+                    "notes": notes
+                }
+                st.success("已保存！")
+                st.rerun()
+
         if st.button("进入世界观构建"):
             st.session_state.stage = "world"
             st.rerun()
@@ -114,6 +153,7 @@ def render_world_stage():
 
     context = st.session_state.context
 
+    # Generate world if not exists
     if context.world is None:
         st.info("正在生成世界观...")
 
@@ -125,8 +165,11 @@ def render_world_stage():
 
         agent = WorldbuilderAgent(llm)
 
+        # Get feedback if exists
+        feedback = st.session_state.pop("world_feedback", None)
+
         with crew_progress("AI 正在构建世界观..."):
-            agent.build_world(context)
+            agent.build_world(context, feedback=feedback)
 
         st.rerun()
     else:
@@ -152,7 +195,7 @@ def render_world_stage():
                 st.write(f"动机: {char.motivation}")
                 st.write(f"弧线: {char.arc}")
 
-        # Confirmation buttons
+        # Confirmation and feedback buttons
         col1, col2 = st.columns(2)
         with col1:
             if st.button("确认并继续"):
@@ -160,8 +203,28 @@ def render_world_stage():
                 st.rerun()
         with col2:
             if st.button("重新生成"):
-                context.world = None
+                st.session_state.show_world_feedback = True
                 st.rerun()
+
+        # Feedback input for regeneration
+        if st.session_state.get("show_world_feedback", False):
+            st.divider()
+            st.subheader("重新生成")
+            feedback = st.text_area(
+                "请输入修改意见（例如：增加更多神秘氛围、修改主角设定等）",
+                key="world_feedback_input"
+            )
+            col3, col4 = st.columns(2)
+            with col3:
+                if st.button("根据意见重新生成"):
+                    context.world = None
+                    st.session_state.world_feedback = feedback
+                    st.session_state.show_world_feedback = False
+                    st.rerun()
+            with col4:
+                if st.button("取消"):
+                    st.session_state.show_world_feedback = False
+                    st.rerun()
 
 
 def render_outline_stage():
@@ -171,10 +234,16 @@ def render_outline_stage():
     context = st.session_state.context
 
     if not context.outline:
-        # Chapter count selector
-        target_chapters = st.slider("章节数", min_value=6, max_value=25, value=12)
+        # Check if there's feedback from previous regeneration attempt
+        feedback = st.session_state.pop("outline_feedback", None)
+        target_chapters = st.session_state.pop(
+            "outline_target_chapters", 10
+        )
 
-        if st.button("生成大纲"):
+        if feedback:
+            # Regenerating with feedback
+            st.info("正在根据反馈重新生成大纲...")
+
             config = load_config()
             llm_config = get_agent_config(config, "outliner")
             llm = get_llm_for_agent(llm_config)
@@ -183,10 +252,29 @@ def render_outline_stage():
 
             agent = OutlinerAgent(llm)
 
-            with crew_progress("AI 正在生成大纲..."):
-                agent.create_outline(context, target_chapters)
+            with crew_progress("AI 正在根据反馈重新生成大纲..."):
+                agent.create_outline(context, target_chapters, feedback=feedback)
 
             st.rerun()
+        else:
+            # Chapter count selector
+            target_chapters = st.slider(
+                "章节数", min_value=5, max_value=20, value=target_chapters
+            )
+
+            if st.button("生成大纲"):
+                config = load_config()
+                llm_config = get_agent_config(config, "outliner")
+                llm = get_llm_for_agent(llm_config)
+
+                from agents.outliner import OutlinerAgent
+
+                agent = OutlinerAgent(llm)
+
+                with crew_progress("AI 正在生成大纲..."):
+                    agent.create_outline(context, target_chapters)
+
+                st.rerun()
     else:
         # Display outline
         for chapter in context.outline:
@@ -199,7 +287,7 @@ def render_outline_stage():
                 if chapter.payoffs:
                     st.write(f"**回收**: {', '.join(chapter.payoffs)}")
 
-        # Confirmation
+        # Confirmation and feedback buttons
         col1, col2 = st.columns(2)
         with col1:
             if st.button("确认并继续"):
@@ -207,8 +295,34 @@ def render_outline_stage():
                 st.rerun()
         with col2:
             if st.button("重新生成"):
-                context.outline = []
+                st.session_state.show_outline_feedback = True
                 st.rerun()
+
+        # Feedback input for regeneration
+        if st.session_state.get("show_outline_feedback", False):
+            st.divider()
+            st.subheader("重新生成")
+            feedback = st.text_area(
+                "请输入修改意见（例如：调整章节节奏、增加更多伏笔等）",
+                key="outline_feedback_input"
+            )
+            target_chapters = st.slider(
+                "章节数", min_value=5, max_value=20,
+                value=len(context.outline) if context.outline else 10,
+                key="outline_feedback_chapters"
+            )
+            col3, col4 = st.columns(2)
+            with col3:
+                if st.button("根据意见重新生成"):
+                    context.outline = []
+                    st.session_state.outline_feedback = feedback
+                    st.session_state.outline_target_chapters = target_chapters
+                    st.session_state.show_outline_feedback = False
+                    st.rerun()
+            with col4:
+                if st.button("取消"):
+                    st.session_state.show_outline_feedback = False
+                    st.rerun()
 
 
 def _write_review_one_chapter(writer, reviewer, context, chapter):
@@ -295,30 +409,72 @@ def render_writing_stage():
         chapter_num = st.session_state.pending_chapter_num
 
         st.warning(f"第{chapter_num}章审核发现大问题，需要你的决策：")
-        for issue in review.get_major_issues():
-            st.error(f"**[{issue['category']}]** {issue['description']}")
-            st.info(f"建议: {issue['suggestion']}")
+
+        # Task 4: Show full chapter content
+        with st.expander("查看完整章节内容", expanded=False):
+            chapter_text = context.chapters[chapter_num - 1]
+            st.text_area(
+                "章节内容",
+                value=chapter_text,
+                height=400,
+                disabled=True,
+                label_visibility="collapsed"
+            )
+
+        # Task 5: Allow selective acceptance and modification of issues
+        st.subheader("请选择要处理的问题并修改建议：")
+
+        major_issues = review.get_major_issues()
+        selected_issues = []
+
+        for i, issue in enumerate(major_issues):
+            col_checkbox, col_details = st.columns([1, 10])
+            with col_checkbox:
+                selected = st.checkbox(
+                    "选择",
+                    key=f"issue_checkbox_{chapter_num}_{i}",
+                    value=True
+                )
+            with col_details:
+                st.error(f"**[{issue['category']}]** {issue['description']}")
+                modified_suggestion = st.text_area(
+                    "修改建议 (可编辑)",
+                    value=issue['suggestion'],
+                    key=f"issue_suggestion_{chapter_num}_{i}",
+                    height=60
+                )
+                if selected:
+                    selected_issues.append({
+                        "category": issue['category'],
+                        "severity": issue['severity'],
+                        "description": issue['description'],
+                        "suggestion": modified_suggestion
+                    })
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("接受建议并修改"):
-                config = load_config()
-                writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
-                from agents.writer import WriterAgent
+            if st.button("接受选中建议并修改"):
+                if not selected_issues:
+                    st.error("请至少选择一个要处理的问题")
+                else:
+                    config = load_config()
+                    writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+                    from agents.writer import WriterAgent
 
-                writer = WriterAgent(writer_llm)
+                    writer = WriterAgent(writer_llm)
 
-                chapter_text = context.chapters[chapter_num - 1]
-                current_chapter = context.outline[chapter_num - 1]
+                    chapter_text = context.chapters[chapter_num - 1]
+                    current_chapter = context.outline[chapter_num - 1]
 
-                with crew_progress("按建议修改中..."):
-                    writer.revise_chapter(context, current_chapter, chapter_text, review.issues)
+                    with crew_progress("按建议修改中..."):
+                        writer.revise_chapter(context, current_chapter, chapter_text, selected_issues)
 
-                _summarize_if_needed(writer, context, chapter_num)
-                st.session_state.pending_review = None
-                st.rerun()
+                    # Task 6: Increment review cycle and set flag to re-review
+                    st.session_state.review_cycle = st.session_state.get("review_cycle", 0) + 1
+                    st.session_state.pending_review_re_review = True
+                    st.rerun()
         with col2:
-            user_guidance = st.text_area("你的修改指导", key="user_guidance")
+            user_guidance = st.text_area("你的修改指导", key=f"user_guidance_{chapter_num}")
             if st.button("按我的指导修改"):
                 if user_guidance:
                     config = load_config()
@@ -340,8 +496,9 @@ def render_writing_stage():
                     with crew_progress("按指导修改中..."):
                         writer.revise_chapter(context, current_chapter, chapter_text, custom_issues)
 
-                    _summarize_if_needed(writer, context, chapter_num)
-                    st.session_state.pending_review = None
+                    # Task 6: Increment review cycle and set flag to re-review
+                    st.session_state.review_cycle = st.session_state.get("review_cycle", 0) + 1
+                    st.session_state.pending_review_re_review = True
                     st.rerun()
         with col3:
             if st.button("忽略，继续下一章"):
@@ -352,7 +509,92 @@ def render_writing_stage():
                 writer = WriterAgent(writer_llm)
                 _summarize_if_needed(writer, context, chapter_num)
                 st.session_state.pending_review = None
+                st.session_state.review_cycle = 0  # Reset cycle for next chapter
                 st.rerun()
+        return
+
+    # Task 6: Handle re-review after user revision
+    if st.session_state.get("pending_review_re_review", False):
+        chapter_num = st.session_state.pending_chapter_num
+        review_cycle = st.session_state.get("review_cycle", 1)
+
+        # Max 3 review cycles
+        if review_cycle >= 3:
+            st.warning(f"已达到最大审核循环次数({review_cycle}轮)，继续下一章")
+            config = load_config()
+            writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+            from agents.writer import WriterAgent
+
+            writer = WriterAgent(writer_llm)
+            _summarize_if_needed(writer, context, chapter_num)
+            st.session_state.pending_review_re_review = False
+            st.session_state.pending_review = None
+            st.session_state.review_cycle = 0
+            st.rerun()
+            return
+
+        config = load_config()
+        review_llm = get_llm_for_agent(get_agent_config(config, "reviewer"))
+        from agents.reviewer import ReviewerAgent
+
+        reviewer = ReviewerAgent(review_llm)
+        current_chapter = context.outline[chapter_num - 1]
+        chapter_text = context.chapters[chapter_num - 1]
+
+        st.info(f"第{chapter_num}章修改后重新审核中（第{review_cycle + 1}轮）...")
+
+        with crew_progress(f"重新审核第{chapter_num}章..."):
+            review = reviewer.review_chapter(context, chapter_num, chapter_text)
+
+        if review.passed:
+            st.success(f"第{chapter_num}章重新审核通过！")
+            config = load_config()
+            writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+            from agents.writer import WriterAgent
+
+            writer = WriterAgent(writer_llm)
+            _summarize_if_needed(writer, context, chapter_num)
+            st.session_state.pending_review_re_review = False
+            st.session_state.pending_review = None
+            st.session_state.review_cycle = 0
+            st.rerun()
+        else:
+            major_issues = review.get_major_issues()
+            if major_issues:
+                # Still has major issues, show decision UI again
+                st.session_state.pending_review = review
+                st.session_state.pending_review_re_review = False
+                st.rerun()
+            else:
+                # Only minor issues, auto-revise
+                minor_issues = review.get_minor_issues()
+                if minor_issues:
+                    st.info(f"第{review_cycle + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中...")
+                    config = load_config()
+                    writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+                    from agents.writer import WriterAgent
+
+                    writer = WriterAgent(writer_llm)
+
+                    with crew_progress("自动修订中..."):
+                        writer.revise_chapter(context, current_chapter, chapter_text, minor_issues)
+
+                    # Re-review again
+                    st.session_state.review_cycle = review_cycle + 1
+                    st.rerun()
+                else:
+                    # No issues
+                    st.success(f"第{chapter_num}章重新审核通过！")
+                    config = load_config()
+                    writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+                    from agents.writer import WriterAgent
+
+                    writer = WriterAgent(writer_llm)
+                    _summarize_if_needed(writer, context, chapter_num)
+                    st.session_state.pending_review_re_review = False
+                    st.session_state.pending_review = None
+                    st.session_state.review_cycle = 0
+                    st.rerun()
         return
 
     # Auto-writing: process ONE chapter per Streamlit run, then rerun

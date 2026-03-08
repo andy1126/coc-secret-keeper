@@ -71,13 +71,22 @@ class WorldbuilderAgent:
         logger.info("WorldbuilderAgent: crew.kickoff() done (%d chars)", len(result))
         return result
 
-    def build_world(self, context: StoryContext) -> WorldSetting:
+    def build_world(
+        self, context: StoryContext, feedback: str | None = None
+    ) -> WorldSetting:
         """Build world setting from story seed."""
+        feedback_section = f"""
+
+用户反馈（请根据以下反馈修改世界观）:
+{feedback}
+""" if feedback else ""
+
         task_desc = f"""
 Based on this story seed, create a complete world setting:
 
 Story Seed:
 {json.dumps(context.seed, ensure_ascii=False, indent=2)}
+{feedback_section}
 
 Output a complete world setting following the format in your instructions.
 """

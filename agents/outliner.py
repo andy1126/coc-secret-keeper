@@ -62,9 +62,16 @@ class OutlinerAgent:
         self,
         context: StoryContext,
         target_chapters: int = 10,
+        feedback: str | None = None,
     ) -> list[ChapterOutline]:
         """Create chapter outline from world setting."""
         world_dict = context.world.model_dump() if context.world else {}
+
+        feedback_section = f"""
+
+用户反馈（请根据以下反馈修改大纲）:
+{feedback}
+""" if feedback else ""
 
         task_desc = f"""
 Create a story outline based on:
@@ -74,6 +81,7 @@ Story Seed:
 
 World Setting:
 {json.dumps(world_dict, ensure_ascii=False, indent=2)}
+{feedback_section}
 
 Target number of chapters: {target_chapters}
 

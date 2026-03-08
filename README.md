@@ -18,6 +18,14 @@ uv sync --extra dev
 
 > 需要 Python 3.11+（<3.14）
 
+## 使用
+
+```bash
+uv run streamlit run app.py
+```
+
+创作流程：故事构思 → 世界观构建 → 大纲生成 → 章节写作（含审核修订循环） → 全文终审 → 导出（TXT / Markdown）
+
 ## 配置
 
 ### 方式一：UI 设置页
@@ -60,14 +68,6 @@ export COC_ANTHROPIC_API_MODEL="model-name"
 命名规则：`COC_{PROVIDER名称大写}_{字段}`，字段为 `API_KEY`、`BASE_URL` 或 `MODEL`。
 
 **优先级**：环境变量 > config.yaml > UI 设置页
-
-## 使用
-
-```bash
-uv run streamlit run app.py
-```
-
-创作流程：故事构思 → 世界观构建 → 大纲生成 → 章节写作（含审核修订循环） → 全文终审 → 导出（TXT / Markdown）
 
 ## 日志
 
