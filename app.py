@@ -1,5 +1,8 @@
+from io import BytesIO
+
 import streamlit as st
 
+from export.pdf_exporter import PDFExporter
 from models.story_context import StoryContext
 from llm.config import load_config, get_agent_config
 from llm.logging import setup_logging, CoCLLMLogger
@@ -65,7 +68,9 @@ def render_sidebar():
 def render_brainstorm_stage():
     """Render brainstorm stage UI."""
     st.header("故事构思")
-    st.write("你好！我是你的克苏鲁故事创作助手。我会在接下来的对话中引导你构思故事，一次问你一个问题。请告诉我你想创作什么样的故事，或者输入'开始'让我来引导你。")
+    st.write(
+        "你好！我是你的克苏鲁故事创作助手。我会在接下来的对话中引导你构思故事，一次问你一个问题。请告诉我你想创作什么样的故事，或者输入'开始'让我来引导你。"
+    )
 
     # Chat interface
     for msg in st.session_state.chat_history:
@@ -114,16 +119,22 @@ def render_brainstorm_stage():
                 era = st.text_input("时代背景", value=seed.get("era", ""))
                 atmosphere = st.text_input("氛围", value=seed.get("atmosphere", ""))
             with col2:
-                mythos = st.text_area("神话元素 (用逗号分隔)", value=", ".join(seed.get("mythos_elements", [])))
+                mythos = st.text_area(
+                    "神话元素 (用逗号分隔)", value=", ".join(seed.get("mythos_elements", []))
+                )
                 writing_style_style = st.selectbox(
                     "文风",
                     ["朴实", "华丽"],
-                    index=0 if seed.get("writing_style", {}).get("style", "朴实") == "朴实" else 1
+                    index=0 if seed.get("writing_style", {}).get("style", "朴实") == "朴实" else 1,
                 )
                 writing_style_narration = st.selectbox(
                     "叙事方式",
                     ["描写为主", "对话为主"],
-                    index=0 if seed.get("writing_style", {}).get("narration", "描写为主") == "描写为主" else 1
+                    index=(
+                        0
+                        if seed.get("writing_style", {}).get("narration", "描写为主") == "描写为主"
+                        else 1
+                    ),
                 )
 
             notes = st.text_area("其他备注", value=seed.get("notes", ""))
@@ -132,12 +143,14 @@ def render_brainstorm_stage():
                 st.session_state.context.seed["theme"] = theme
                 st.session_state.context.seed["era"] = era
                 st.session_state.context.seed["atmosphere"] = atmosphere
-                st.session_state.context.seed["mythos_elements"] = [e.strip() for e in mythos.split(",") if e.strip()]
+                st.session_state.context.seed["mythos_elements"] = [
+                    e.strip() for e in mythos.split(",") if e.strip()
+                ]
                 st.session_state.context.seed["notes"] = notes
                 st.session_state.context.seed["writing_style"] = {
                     "style": writing_style_style,
                     "narration": writing_style_narration,
-                    "notes": notes
+                    "notes": notes,
                 }
                 st.success("已保存！")
                 st.rerun()
@@ -212,7 +225,7 @@ def render_world_stage():
             st.subheader("重新生成")
             feedback = st.text_area(
                 "请输入修改意见（例如：增加更多神秘氛围、修改主角设定等）",
-                key="world_feedback_input"
+                key="world_feedback_input",
             )
             col3, col4 = st.columns(2)
             with col3:
@@ -236,9 +249,7 @@ def render_outline_stage():
     if not context.outline:
         # Check if there's feedback from previous regeneration attempt
         feedback = st.session_state.pop("outline_feedback", None)
-        target_chapters = st.session_state.pop(
-            "outline_target_chapters", 10
-        )
+        target_chapters = st.session_state.pop("outline_target_chapters", 10)
 
         if feedback:
             # Regenerating with feedback
@@ -258,9 +269,7 @@ def render_outline_stage():
             st.rerun()
         else:
             # Chapter count selector
-            target_chapters = st.slider(
-                "章节数", min_value=5, max_value=20, value=target_chapters
-            )
+            target_chapters = st.slider("章节数", min_value=5, max_value=20, value=target_chapters)
 
             if st.button("生成大纲"):
                 config = load_config()
@@ -303,13 +312,14 @@ def render_outline_stage():
             st.divider()
             st.subheader("重新生成")
             feedback = st.text_area(
-                "请输入修改意见（例如：调整章节节奏、增加更多伏笔等）",
-                key="outline_feedback_input"
+                "请输入修改意见（例如：调整章节节奏、增加更多伏笔等）", key="outline_feedback_input"
             )
             target_chapters = st.slider(
-                "章节数", min_value=5, max_value=20,
+                "章节数",
+                min_value=5,
+                max_value=20,
                 value=len(context.outline) if context.outline else 10,
-                key="outline_feedback_chapters"
+                key="outline_feedback_chapters",
             )
             col3, col4 = st.columns(2)
             with col3:
@@ -418,7 +428,7 @@ def render_writing_stage():
                 value=chapter_text,
                 height=400,
                 disabled=True,
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
 
         # Task 5: Allow selective acceptance and modification of issues
@@ -430,26 +440,24 @@ def render_writing_stage():
         for i, issue in enumerate(major_issues):
             col_checkbox, col_details = st.columns([1, 10])
             with col_checkbox:
-                selected = st.checkbox(
-                    "选择",
-                    key=f"issue_checkbox_{chapter_num}_{i}",
-                    value=True
-                )
+                selected = st.checkbox("选择", key=f"issue_checkbox_{chapter_num}_{i}", value=True)
             with col_details:
                 st.error(f"**[{issue['category']}]** {issue['description']}")
                 modified_suggestion = st.text_area(
                     "修改建议 (可编辑)",
-                    value=issue['suggestion'],
+                    value=issue["suggestion"],
                     key=f"issue_suggestion_{chapter_num}_{i}",
-                    height=60
+                    height=60,
                 )
                 if selected:
-                    selected_issues.append({
-                        "category": issue['category'],
-                        "severity": issue['severity'],
-                        "description": issue['description'],
-                        "suggestion": modified_suggestion
-                    })
+                    selected_issues.append(
+                        {
+                            "category": issue["category"],
+                            "severity": issue["severity"],
+                            "description": issue["description"],
+                            "suggestion": modified_suggestion,
+                        }
+                    )
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -467,7 +475,9 @@ def render_writing_stage():
                     current_chapter = context.outline[chapter_num - 1]
 
                     with crew_progress("按建议修改中..."):
-                        writer.revise_chapter(context, current_chapter, chapter_text, selected_issues)
+                        writer.revise_chapter(
+                            context, current_chapter, chapter_text, selected_issues
+                        )
 
                     # Task 6: Increment review cycle and set flag to re-review
                     st.session_state.review_cycle = st.session_state.get("review_cycle", 0) + 1
@@ -569,7 +579,9 @@ def render_writing_stage():
                 # Only minor issues, auto-revise
                 minor_issues = review.get_minor_issues()
                 if minor_issues:
-                    st.info(f"第{review_cycle + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中...")
+                    st.info(
+                        f"第{review_cycle + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中..."
+                    )
                     config = load_config()
                     writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
                     from agents.writer import WriterAgent
@@ -717,18 +729,6 @@ def render_review_stage():
     col1, col2 = st.columns(2)
 
     with col1:
-        full_text = "\n\n".join(
-            f"第{i+1}章\n{context.outline[i].title}\n\n{text}"
-            for i, text in enumerate(context.chapters)
-        )
-        st.download_button(
-            "导出为 TXT",
-            full_text,
-            file_name="coc_story.txt",
-            mime="text/plain",
-        )
-
-    with col2:
         md_text = f"# {context.seed.get('theme', '克苏鲁故事')}\n\n"
         for i, text in enumerate(context.chapters):
             md_text += f"## 第{i+1}章: {context.outline[i].title}\n\n{text}\n\n"
@@ -738,6 +738,23 @@ def render_review_stage():
             file_name="coc_story.md",
             mime="text/markdown",
         )
+
+    with col2:
+        try:
+            pdf_buffer = BytesIO()
+            exporter = PDFExporter()
+            exporter.export(context, pdf_buffer)
+            pdf_buffer.seek(0)
+
+            st.download_button(
+                "导出为 PDF",
+                pdf_buffer,
+                file_name="coc_story.pdf",
+                mime="application/pdf",
+            )
+        except Exception as e:
+            st.error(f"PDF生成失败: {str(e)}")
+            st.caption("提示: 请确保系统已安装中文字体")
 
 
 def render_settings():
