@@ -1,4 +1,7 @@
+import json
+from datetime import datetime
 from io import BytesIO
+from typing import Any
 
 import streamlit as st
 
@@ -18,6 +21,46 @@ def init_session():
         st.session_state.stage = "brainstorm"
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+
+
+SAVE_VERSION = 1
+VALID_STAGES = {"brainstorm", "world", "outline", "writing", "review", "complete"}
+
+
+def build_save_data(
+    context: StoryContext, stage: str, chat_history: list[dict[str, str]]
+) -> dict[str, Any]:
+    """Build a save-file dictionary from current session state."""
+    return {
+        "version": SAVE_VERSION,
+        "saved_at": datetime.now().isoformat(timespec="seconds"),
+        "stage": stage,
+        "context": context.to_dict(),
+        "chat_history": chat_history,
+    }
+
+
+def parse_save_data(raw: bytes) -> tuple[StoryContext, str, list[dict[str, str]]]:
+    """Parse and validate a save file. Raises ValueError on invalid data."""
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise ValueError(f"无效的 JSON 文件: {e}") from e
+
+    for key in ("version", "stage", "context", "chat_history"):
+        if key not in data:
+            raise ValueError(f"存档缺少必要字段: {key}")
+
+    stage = data["stage"]
+    if stage not in VALID_STAGES:
+        raise ValueError(f"无效的阶段: {stage}")
+
+    try:
+        context = StoryContext.from_dict(data["context"])
+    except Exception as e:
+        raise ValueError(f"无法解析存档数据: {e}") from e
+
+    return context, stage, data["chat_history"]
 
 
 def render_sidebar():
@@ -63,6 +106,48 @@ def render_sidebar():
                 all_payoffs.extend(ch.payoffs)
             st.write(f"埋设: {len(all_foreshadowing)}")
             st.write(f"回收: {len(all_payoffs)}")
+
+        # Save/Load
+        st.divider()
+        st.subheader("存档管理")
+
+        save_data = build_save_data(
+            st.session_state.context,
+            st.session_state.stage,
+            st.session_state.chat_history,
+        )
+        st.download_button(
+            "保存进度",
+            data=json.dumps(save_data, ensure_ascii=False, indent=2),
+            file_name="coc_story_save.json",
+            mime="application/json",
+        )
+
+        uploaded = st.file_uploader("读取存档", type=["json"])
+        if uploaded is not None:
+            file_id = f"{uploaded.name}_{uploaded.size}"
+            if st.session_state.get("_last_loaded_save") != file_id:
+                try:
+                    context, stage, chat_history = parse_save_data(uploaded.read())
+                    st.session_state.context = context
+                    st.session_state.stage = stage
+                    st.session_state.chat_history = chat_history
+                    # Clear transient UI state
+                    for key in [
+                        "pending_review",
+                        "pending_chapter_num",
+                        "pending_review_re_review",
+                        "review_cycle",
+                        "auto_writing_in_progress",
+                        "show_world_feedback",
+                        "show_outline_feedback",
+                        "final_review_result",
+                    ]:
+                        st.session_state.pop(key, None)
+                    st.session_state._last_loaded_save = file_id
+                    st.rerun()
+                except (ValueError, Exception) as e:
+                    st.error(f"存档读取失败: {e}")
 
 
 def render_brainstorm_stage():
@@ -186,6 +271,19 @@ def render_world_stage():
 
         st.rerun()
     else:
+        # Check for pending feedback — revise existing world
+        feedback = st.session_state.pop("world_feedback", None)
+        if feedback:
+            config = load_config()
+            llm_config = get_agent_config(config, "worldbuilder")
+            llm = get_llm_for_agent(llm_config)
+            from agents.worldbuilder import WorldbuilderAgent
+
+            agent = WorldbuilderAgent(llm)
+            with crew_progress("AI 正在根据反馈修改世界观..."):
+                agent.build_world(context, feedback=feedback)
+            st.rerun()
+
         # Display world setting
         st.subheader("时代背景")
         st.write(context.world.era)
@@ -230,7 +328,6 @@ def render_world_stage():
             col3, col4 = st.columns(2)
             with col3:
                 if st.button("根据意见重新生成"):
-                    context.world = None
                     st.session_state.world_feedback = feedback
                     st.session_state.show_world_feedback = False
                     st.rerun()
@@ -285,6 +382,24 @@ def render_outline_stage():
 
                 st.rerun()
     else:
+        # Check for pending feedback — revise existing outline
+        feedback = st.session_state.pop("outline_feedback", None)
+        target_chapters = st.session_state.pop("outline_target_chapters", None)
+        if feedback:
+            config = load_config()
+            llm_config = get_agent_config(config, "outliner")
+            llm = get_llm_for_agent(llm_config)
+            from agents.outliner import OutlinerAgent
+
+            agent = OutlinerAgent(llm)
+            with crew_progress("AI 正在根据反馈修改大纲..."):
+                agent.create_outline(
+                    context,
+                    target_chapters or len(context.outline),
+                    feedback=feedback,
+                )
+            st.rerun()
+
         # Display outline
         for chapter in context.outline:
             with st.expander(f"第{chapter.number}章: {chapter.title}"):
@@ -324,7 +439,6 @@ def render_outline_stage():
             col3, col4 = st.columns(2)
             with col3:
                 if st.button("根据意见重新生成"):
-                    context.outline = []
                     st.session_state.outline_feedback = feedback
                     st.session_state.outline_target_chapters = target_chapters
                     st.session_state.show_outline_feedback = False
@@ -480,6 +594,7 @@ def render_writing_stage():
                         )
 
                     # Task 6: Increment review cycle and set flag to re-review
+                    st.session_state.pending_review = None
                     st.session_state.review_cycle = st.session_state.get("review_cycle", 0) + 1
                     st.session_state.pending_review_re_review = True
                     st.rerun()
@@ -507,6 +622,7 @@ def render_writing_stage():
                         writer.revise_chapter(context, current_chapter, chapter_text, custom_issues)
 
                     # Task 6: Increment review cycle and set flag to re-review
+                    st.session_state.pending_review = None
                     st.session_state.review_cycle = st.session_state.get("review_cycle", 0) + 1
                     st.session_state.pending_review_re_review = True
                     st.rerun()

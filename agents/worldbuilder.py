@@ -88,12 +88,29 @@ class WorldbuilderAgent:
 {feedback}
 """ if feedback else ""
 
-        task_desc = f"""
+        existing_world = context.world.model_dump() if context.world and feedback else None
+
+        if existing_world:
+            task_desc = f"""
+Based on the following existing world setting and user feedback, revise the world setting.
+Keep everything the user didn't mention unchanged, only modify what the feedback requests.
+
+Story Seed:
+{json.dumps(context.seed, ensure_ascii=False, indent=2)}
+
+Current World Setting:
+{json.dumps(existing_world, ensure_ascii=False, indent=2)}
+
+{feedback_section}
+
+Output the revised complete world setting following the format in your instructions.
+"""
+        else:
+            task_desc = f"""
 Based on this story seed, create a complete world setting:
 
 Story Seed:
 {json.dumps(context.seed, ensure_ascii=False, indent=2)}
-{feedback_section}
 
 Output a complete world setting following the format in your instructions.
 """

@@ -73,7 +73,32 @@ class OutlinerAgent:
 {feedback}
 """ if feedback else ""
 
-        task_desc = f"""
+        existing_outline = (
+            [c.model_dump() for c in context.outline] if context.outline and feedback else None
+        )
+
+        if existing_outline:
+            task_desc = f"""
+Based on the following existing outline and user feedback, revise the outline.
+Keep everything the user didn't mention unchanged, only modify what the feedback requests.
+
+Story Seed:
+{json.dumps(context.seed, ensure_ascii=False, indent=2)}
+
+World Setting:
+{json.dumps(world_dict, ensure_ascii=False, indent=2)}
+
+Current Outline:
+{json.dumps(existing_outline, ensure_ascii=False, indent=2)}
+
+{feedback_section}
+
+Target number of chapters: {target_chapters}
+
+Output the revised complete outline following the format in your instructions.
+"""
+        else:
+            task_desc = f"""
 Create a story outline based on:
 
 Story Seed:
@@ -81,7 +106,6 @@ Story Seed:
 
 World Setting:
 {json.dumps(world_dict, ensure_ascii=False, indent=2)}
-{feedback_section}
 
 Target number of chapters: {target_chapters}
 
