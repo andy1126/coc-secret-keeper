@@ -802,9 +802,24 @@ def render_review_stage():
 
     # Run final review if not done yet
     if st.session_state.final_review_result is None:
+        config = load_config()
+
+        # Back-fill missing chapter summaries (e.g. from legacy save files)
+        if len(context.chapter_summaries) < len(context.chapters):
+            st.info("正在补充生成缺失的章节摘要...")
+            writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+            from agents.writer import WriterAgent
+
+            writer = WriterAgent(writer_llm)
+            for idx in range(len(context.chapter_summaries), len(context.chapters)):
+                chapter = context.outline[idx]
+                chapter_text = context.chapters[idx]
+                with crew_progress(f"正在生成第{chapter.number}章摘要..."):
+                    summary = writer.summarize_chapter(chapter, chapter_text)
+                context.chapter_summaries.append(summary)
+
         st.info("正在进行全文终审...")
 
-        config = load_config()
         review_llm = get_llm_for_agent(get_agent_config(config, "reviewer"))
 
         from agents.reviewer import ReviewerAgent
