@@ -106,8 +106,13 @@ class ConflictArchitectAgent:
 }}
 ```
 """
-        initial_result = self._run_agent(generate_desc)
-        initial_design = self._extract_conflict(initial_result)
+        from agents.json_utils import run_with_retry
+
+        initial_design = run_with_retry(
+            lambda: self._run_agent(generate_desc),
+            self._extract_conflict,
+            label="ConflictArchitectAgent.initial",
+        )
 
         # Step 2: Self-evaluate
         eval_desc = f"""
@@ -156,8 +161,11 @@ class ConflictArchitectAgent:
 }}
 ```
 """
-        refined_result = self._run_agent(refine_desc)
-        refined_design = self._extract_conflict(refined_result)
+        refined_design = run_with_retry(
+            lambda: self._run_agent(refine_desc),
+            self._extract_conflict,
+            label="ConflictArchitectAgent.refined",
+        )
 
         context.conflict_design = refined_design
         return refined_design

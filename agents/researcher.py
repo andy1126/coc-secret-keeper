@@ -85,7 +85,12 @@ class ResearcherAgent:
 }}
 ```
 """
-        result = self._run_agent(task_desc)
-        notes = self._extract_notes(result)
+        from agents.json_utils import run_with_retry
+
+        notes = run_with_retry(
+            lambda: self._run_agent(task_desc),
+            self._extract_notes,
+            label="ResearcherAgent",
+        )
         context.research_notes = notes
         return notes

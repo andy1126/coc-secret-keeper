@@ -116,9 +116,16 @@ until all beats have been addressed. Check this list before writing your ending.
 """
 
         result = self._run_agent(task_desc)
-        context.chapters.append(result)
-        ending = result[-500:] if len(result) > 500 else result
-        context.chapter_endings.append(ending)
+        idx = chapter.number - 1
+        if idx < len(context.chapters):
+            # Chapter slot already exists (e.g. retry / re-generation) — replace
+            context.chapters[idx] = result
+        else:
+            context.chapters.append(result)
+        if idx < len(context.chapter_endings):
+            context.chapter_endings[idx] = result[-500:] if len(result) > 500 else result
+        else:
+            context.chapter_endings.append(result[-500:] if len(result) > 500 else result)
         return result
 
     def summarize_chapter(self, chapter: ChapterOutline, chapter_text: str) -> str:
@@ -169,4 +176,8 @@ Output the complete revised chapter in Chinese.
         idx = chapter.number - 1
         if idx < len(context.chapters):
             context.chapters[idx] = result
+        # Update chapter ending to match revised content
+        if idx < len(context.chapter_endings):
+            ending = result[-500:] if len(result) > 500 else result
+            context.chapter_endings[idx] = ending
         return result

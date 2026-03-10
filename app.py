@@ -9,7 +9,7 @@ from export.pdf_exporter import PDFExporter
 from models.story_context import StoryContext
 from llm.config import load_config, get_agent_config
 from llm.logging import setup_logging, CoCLLMLogger
-from llm.provider import get_llm_for_agent
+from llm.provider import get_llm_for_agent, get_litellm_stream_params
 from ui.crew_progress import crew_progress
 
 
@@ -178,19 +178,20 @@ def render_brainstorm_stage():
         with st.chat_message("user"):
             st.write(user_input)
 
-        # assistant 气泡 + spinner
+        # assistant 气泡 — 流式输出（token 本身即为反馈，无需 spinner）
         with st.chat_message("assistant"):
-            with st.spinner("思考中..."):
-                config = load_config()
-                llm_config = get_agent_config(config, "brainstorm")
-                llm = get_llm_for_agent(llm_config)
-                from agents.brainstorm import BrainstormAgent
+            config = load_config()
+            llm_config = get_agent_config(config, "brainstorm")
+            litellm_params = get_litellm_stream_params(llm_config)
+            llm = get_llm_for_agent(llm_config)
+            from agents.brainstorm import BrainstormAgent
 
-                agent = BrainstormAgent(llm)
-                # 恢复之前的对话历史（排除刚追加的当前用户消息，chat() 会自行追加）
-                agent.conversation_history = list(st.session_state.chat_history[:-1])
-                response = agent.chat(user_input, st.session_state.context)
-            st.write(response)
+            agent = BrainstormAgent(llm)
+            # 恢复之前的对话历史（排除刚追加的当前用户消息，chat_stream() 会自行追加）
+            agent.conversation_history = list(st.session_state.chat_history[:-1])
+            stream = agent.chat_stream(user_input, st.session_state.context, litellm_params)
+            response = st.write_stream(stream)
+            agent.finalize_stream(response, st.session_state.context)
 
         st.session_state.chat_history.append({"role": "assistant", "content": response})
         st.rerun()
@@ -220,21 +221,19 @@ def render_brainstorm_stage():
                 mythos = st.text_area(
                     "神话元素 (用逗号分隔)", value=", ".join(seed.get("mythos_elements", []))
                 )
-                writing_style_style = st.selectbox(
+                writing_style_style = st.text_input(
                     "文风",
-                    ["朴实", "华丽"],
-                    index=0 if seed.get("writing_style", {}).get("style", "朴实") == "朴实" else 1,
+                    value=seed.get("writing_style", {}).get("style", ""),
                 )
-                writing_style_narration = st.selectbox(
+                writing_style_narration = st.text_input(
                     "叙事方式",
-                    ["描写为主", "对话为主"],
-                    index=(
-                        0
-                        if seed.get("writing_style", {}).get("narration", "描写为主") == "描写为主"
-                        else 1
-                    ),
+                    value=seed.get("writing_style", {}).get("narration", ""),
                 )
 
+            writing_style_notes = st.text_area(
+                "风格要求",
+                value=seed.get("writing_style", {}).get("writing_style_notes", ""),
+            )
             target_chapters = st.slider(
                 "目标章节数",
                 min_value=5,
@@ -255,7 +254,7 @@ def render_brainstorm_stage():
                 st.session_state.context.seed["writing_style"] = {
                     "style": writing_style_style,
                     "narration": writing_style_narration,
-                    "notes": notes,
+                    "writing_style_notes": writing_style_notes,
                 }
                 st.success("已保存！")
                 st.rerun()
@@ -573,6 +572,10 @@ def _write_review_one_chapter(writer, reviewer, context, chapter):
             else:
                 st.warning("3轮自动修订仍未通过，升级为需要用户决策")
                 return chapter_text, review
+        elif review.issues:
+            # Issues exist but severity didn't match "minor"/"major" exactly;
+            # treat as major to avoid silently skipping review
+            return chapter_text, review
 
     return chapter_text, None
 
@@ -782,9 +785,9 @@ def render_writing_stage():
                 st.session_state.pending_review_re_review = False
                 st.rerun()
             else:
-                # Only minor issues, auto-revise
                 minor_issues = review.get_minor_issues()
                 if minor_issues:
+                    # Only minor issues, auto-revise
                     st.info(
                         f"第{review_cycle + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中..."
                     )
@@ -800,8 +803,14 @@ def render_writing_stage():
                     # Re-review again
                     st.session_state.review_cycle = review_cycle + 1
                     st.rerun()
+                elif review.issues:
+                    # Issues exist but severity didn't match "minor"/"major";
+                    # treat as major to avoid silently skipping review
+                    st.session_state.pending_review = review
+                    st.session_state.pending_review_re_review = False
+                    st.rerun()
                 else:
-                    # No issues
+                    # Genuinely no issues
                     st.success(f"第{chapter_num}章重新审核通过！")
                     config = load_config()
                     writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))

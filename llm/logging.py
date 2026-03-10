@@ -56,6 +56,8 @@ class CoCLLMLogger(CustomLogger):
         logger.info("LLM REQUEST  model=%s messages=%d last=%s", model, len(messages), summary)
 
     def log_success_event(self, kwargs, response_obj, start_time, end_time):
+        if kwargs.get("stream"):
+            return  # Streaming chunks logged by agent after full response collected
         model = kwargs.get("model", "unknown")
         duration = round(end_time - start_time, 2) if isinstance(start_time, float) else "N/A"
         # Handle both litellm response objects and raw dicts

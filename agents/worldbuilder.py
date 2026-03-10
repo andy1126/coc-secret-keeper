@@ -127,8 +127,13 @@ class WorldbuilderAgent:
 }}
 ```
 """
-        result = self._run_agent(task_desc)
-        questions = self._extract_questions(result)
+        from agents.json_utils import run_with_retry
+
+        questions = run_with_retry(
+            lambda: self._run_agent(task_desc),
+            self._extract_questions,
+            label="WorldbuilderAgent.generate_questions",
+        )
         context.research_questions = questions
         return questions
 
@@ -184,7 +189,12 @@ Story Seed:
 Output a complete world setting following the format in your instructions.
 """
 
-        result = self._run_agent(task_desc)
-        world = self._extract_world(result)
+        from agents.json_utils import run_with_retry
+
+        world = run_with_retry(
+            lambda: self._run_agent(task_desc),
+            self._extract_world,
+            label="WorldbuilderAgent.build_world",
+        )
         context.world = world
         return world

@@ -3,8 +3,57 @@
 import json
 import logging
 import re
+from collections.abc import Callable
+from typing import TypeVar
 
 logger = logging.getLogger("coc.llm")
+
+T = TypeVar("T")
+
+
+def run_with_retry(
+    run_fn: Callable[[], str],
+    extract_fn: Callable[[str], T],
+    *,
+    max_retries: int = 2,
+    label: str = "agent",
+) -> T:
+    """Run an LLM call and extract structured data, retrying on parse failure.
+
+    Args:
+        run_fn: Callable that invokes the LLM and returns raw text.
+        extract_fn: Callable that parses raw text into structured data.
+                    Must raise ValueError if extraction fails.
+        max_retries: Total attempts (including the first). Default 2.
+        label: Name for log messages.
+
+    Returns:
+        Extracted structured data from extract_fn.
+
+    Raises:
+        ValueError: If all attempts fail.
+    """
+    last_error: ValueError | None = None
+    for attempt in range(1, max_retries + 1):
+        raw = run_fn()
+        try:
+            return extract_fn(raw)
+        except ValueError as e:
+            last_error = e
+            if attempt < max_retries:
+                logger.warning(
+                    "%s: JSON extraction failed (attempt %d/%d), retrying...",
+                    label,
+                    attempt,
+                    max_retries,
+                )
+            else:
+                logger.error(
+                    "%s: JSON extraction failed after %d attempts",
+                    label,
+                    max_retries,
+                )
+    raise last_error  # type: ignore[misc]
 
 
 def _try_parse_json(raw: str) -> dict | None:

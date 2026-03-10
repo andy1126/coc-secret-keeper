@@ -17,10 +17,14 @@ class ReviewResult:
         self.overall_assessment = data.get("overall_assessment", "")
 
     def get_minor_issues(self) -> list[dict]:
-        return [i for i in self.issues if i.get("severity") == "minor"]
+        return [
+            i for i in self.issues if str(i.get("severity", "")).strip().lower() == "minor"
+        ]
 
     def get_major_issues(self) -> list[dict]:
-        return [i for i in self.issues if i.get("severity") == "major"]
+        return [
+            i for i in self.issues if str(i.get("severity", "")).strip().lower() == "major"
+        ]
 
 
 class ReviewerAgent:
@@ -147,8 +151,13 @@ If truncated or missing outline content, report as category "completeness" with 
 Provide a complete review following the format in your instructions.
 """
 
-        result = self._run_agent(task_desc)
-        review = self._extract_review(result)
+        from agents.json_utils import run_with_retry
+
+        review = run_with_retry(
+            lambda: self._run_agent(task_desc),
+            self._extract_review,
+            label="ReviewerAgent.review_chapter",
+        )
 
         # Record review
         context.review_notes.append(
@@ -202,8 +211,13 @@ Provide a complete review following the format in your instructions.
 Provide a complete review following the format in your instructions.
 """
 
-        result = self._run_agent(task_description)
-        review = self._extract_review(result)
+        from agents.json_utils import run_with_retry
+
+        review = run_with_retry(
+            lambda: self._run_agent(task_description),
+            self._extract_review,
+            label="ReviewerAgent.final_review",
+        )
 
         context.review_notes.append(
             f"FINAL REVIEW: {'PASS' if review.passed else 'NEEDS_REVISION'}"

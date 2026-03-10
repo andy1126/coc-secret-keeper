@@ -84,7 +84,7 @@ class OutlinerAgent:
         conflict_section = ""
         if context.conflict_design:
             conflict_section = f"""
-冲突设计（请以此作为故事骨架安排章节）:
+冲突设计（请以此作为故事骨架安排章节内容），根据内容取章节标题:
 {json.dumps(context.conflict_design.model_dump(), ensure_ascii=False, indent=2)}
 """
 
@@ -125,7 +125,12 @@ Target number of chapters: {target_chapters}
 Output a complete outline following the format in your instructions.
 """
 
-        result = self._run_agent(task_desc)
-        outline = self._extract_outline(result)
+        from agents.json_utils import run_with_retry
+
+        outline = run_with_retry(
+            lambda: self._run_agent(task_desc),
+            self._extract_outline,
+            label="OutlinerAgent",
+        )
         context.outline = outline
         return outline

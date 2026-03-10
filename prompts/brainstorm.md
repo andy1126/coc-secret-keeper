@@ -30,9 +30,9 @@
     "motivation": "核心动机"
   },
   "writing_style": {
-    "style": "朴实/华丽",
-    "narration": "描写为主/对话为主，第一人称自述/第三人称/第一人称作为旁观者",
-    "notes": "其他备注"
+    "style": "文风描述（如：朴实、华丽、冷峻、诗意等）",
+    "narration": "叙事方式（如：描写为主、对话为主、第一人称自述、第三人称、多线叙事等）",
+    "writing_style_notes": "用户补充的风格要求"
   },
   "target_chapters": 10,
   "notes": "其他备注"

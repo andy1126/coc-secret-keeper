@@ -4,11 +4,16 @@
 
 ## 功能
 
-- **Brainstorm** — 对话式收集故事构思（主题、时代、氛围、主角等）
-- **Worldbuilder** — 自动构建克苏鲁世界观（地点、神话实体、角色），支持基于反馈在已有版本上修改
-- **Outliner** — 生成章节大纲，规划伏笔埋设与回收，支持基于反馈在已有版本上修改
+- **Brainstorm** — 对话式收集故事构思（主题、时代、氛围、主角、文风等），LLM 响应逐 token 流式输出
+- **Design Team** — 多智能体协作完成故事设计：
+  - **Researcher** — 基于故事种子生成研究问题并进行系统性研究
+  - **Worldbuilder** — 构建克苏鲁世界观（地点、神话实体、角色、秘密、暗流、前史）
+  - **Conflict Architect** — 设计冲突结构（内外冲突 + 戏剧节拍），含自我评估与优化
+  - **Outliner** — 生成章节大纲，规划伏笔埋设与回收
+  - **Narrative Reviewer** — 六维叙事审查，发现问题自动迭代修正
 - **Writer** — 逐章撰写正文，支持基于审核反馈的修订
-- **Reviewer** — 自动审核章节质量，小问题自动修订（最多 3 轮），大问题交由用户决策；完稿后进行全文终审（伏笔回收、角色弧线、氛围连贯、首尾呼应）
+- **Reviewer** — 自动审核章节质量，小问题自动修订（最多 3 轮），大问题交由用户决策（可选择性接受/编辑建议）；完稿后进行全文终审（伏笔回收、角色弧线、氛围连贯、首尾呼应）
+- **导出** — Markdown / PDF
 
 ## 安装
 
@@ -24,9 +29,12 @@ uv sync --extra dev
 uv run streamlit run app.py
 ```
 
-创作流程：故事构思 → 世界观构建 → 大纲生成 → 章节写作（含审核修订循环） → 全文终审 → 导出（Markdown / PDF）
+创作流程：故事构思 → 故事设计（研究 → 世界观 + 冲突 → 大纲 + 叙事审查） → 章节写作（含审核修订循环） → 全文终审 → 导出
 
-世界观和大纲阶段支持"根据意见重新生成"：输入修改意见后，LLM 会在已有版本基础上修改，而非从头创建。
+- Brainstorm 阶段采用流式输出，LLM 响应逐 token 显示
+- 故事设计阶段支持"根据意见重新生成"：输入修改意见后，LLM 在已有版本基础上修改
+- 所有 Agent 的 JSON 提取内置自动重试（最多 2 次），提升 LLM 输出解析的健壮性
+- 存档/读档：随时保存和恢复创作进度
 
 ## 配置
 
@@ -49,9 +57,15 @@ llm:
 agents:
   brainstorm:
     provider: anthropic_api
+  researcher:
+    provider: anthropic_api
   worldbuilder:
     provider: anthropic_api
+  conflict_architect:
+    provider: anthropic_api
   outliner:
+    provider: anthropic_api
+  narrative_reviewer:
     provider: anthropic_api
   writer:
     provider: anthropic_api

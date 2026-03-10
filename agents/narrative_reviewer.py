@@ -130,5 +130,10 @@ class NarrativeReviewerAgent:
 
 只有当存在 major 问题时 passed 才为 false。
 """
-        result = self._run_agent(task_desc)
-        return self._extract_review(result)
+        from agents.json_utils import run_with_retry
+
+        return run_with_retry(
+            lambda: self._run_agent(task_desc),
+            self._extract_review,
+            label="NarrativeReviewerAgent",
+        )
