@@ -1,4 +1,18 @@
-from models.schemas import Character, Entity, Location, WorldSetting, ChapterOutline
+from models.schemas import (
+    Character,
+    Entity,
+    Location,
+    WorldSetting,
+    ChapterOutline,
+    Secret,
+    Tension,
+    TimelineEvent,
+    ResearchQuestion,
+    ResearchNote,
+    ConflictDesign,
+    NarrativeIssue,
+)
+from models.story_context import StoryContext
 
 
 def test_character_creation():
@@ -61,3 +75,154 @@ def test_chapter_outline_creation():
     )
     assert chapter.number == 1
     assert chapter.word_target == 3000
+
+
+# --- Task 1: New schema models ---
+
+
+def test_secret_creation():
+    secret = Secret(content="镇长是邪教领袖", known_by=["镇长", "牧师"], layer=2)
+    assert secret.layer == 2
+    assert len(secret.known_by) == 2
+
+
+def test_tension_creation():
+    tension = Tension(parties=["镇长", "调查员"], nature="秘密", status="潜伏")
+    assert tension.nature == "秘密"
+
+
+def test_timeline_event_creation():
+    event = TimelineEvent(when="1920年春", event="矿坑坍塌", consequences="镇民恐慌")
+    assert "矿坑" in event.event
+
+
+def test_research_question_creation():
+    q = ResearchQuestion(topic="genre", question="调查类克苏鲁的经典模式？")
+    assert q.topic == "genre"
+
+
+def test_research_note_creation():
+    note = ResearchNote(
+        topic="psychology",
+        findings="面对不可名状恐惧时，人类会经历否认→恐惧→解离三阶段",
+        sources=["《恐惧心理学》", "洛夫克拉夫特书信集"],
+    )
+    assert len(note.sources) == 2
+
+
+def test_conflict_design_creation():
+    cd = ConflictDesign(
+        inner_conflict="渴望真相 vs 恐惧疯狂",
+        outer_conflict="邪教组织阻止调查",
+        inciting_incident="发现失踪教授的笔记",
+        midpoint_reversal="可信赖的盟友其实是邪教成员",
+        all_is_lost="被关入精神病院",
+        dark_night_of_soul="开始怀疑自己是否真的疯了",
+        climax="直面古神仪式现场",
+        resolution="真相被掩埋，主角带着创伤离开",
+    )
+    assert "渴望" in cd.inner_conflict
+
+
+def test_narrative_issue_creation():
+    issue = NarrativeIssue(
+        dimension="tension_sufficiency",
+        severity="major",
+        description="第3-5章缺乏冲突",
+        suggestion="加入对抗",
+        target="outline",
+    )
+    assert issue.target == "outline"
+
+
+def test_narrative_issue_conflict_target():
+    issue = NarrativeIssue(
+        dimension="character_agency",
+        severity="major",
+        description="冲突设计被动",
+        suggestion="重设内在冲突",
+        target="conflict",
+    )
+    assert issue.target == "conflict"
+
+
+# --- Task 2: WorldSetting new fields ---
+
+
+def test_world_setting_with_new_fields():
+    world = WorldSetting(
+        era="1920年代",
+        locations=[Location(name="阿卡姆镇", description="小镇")],
+        entities=[Entity(name="古老者", description="外星生物", influence="梦境")],
+        forbidden_knowledge="真相",
+        rules=["规则1"],
+        characters=[
+            Character(
+                name="张三",
+                background="学者",
+                personality="好奇",
+                motivation="求知",
+                arc="堕落",
+                relationships=[],
+            )
+        ],
+        secrets=[Secret(content="镇长是邪教领袖", known_by=["镇长"], layer=2)],
+        tensions=[Tension(parties=["镇长", "调查员"], nature="秘密", status="潜伏")],
+        timeline=[TimelineEvent(when="1920年春", event="矿坑坍塌", consequences="恐慌")],
+    )
+    assert len(world.secrets) == 1
+    assert len(world.tensions) == 1
+    assert len(world.timeline) == 1
+
+
+def test_world_setting_new_fields_default_empty():
+    world = WorldSetting(
+        era="1920年代",
+        locations=[],
+        entities=[],
+        forbidden_knowledge="",
+        rules=[],
+        characters=[],
+    )
+    assert world.secrets == []
+    assert world.tensions == []
+    assert world.timeline == []
+
+
+# --- Task 3: ChapterOutline new fields ---
+
+
+def test_chapter_outline_with_new_fields():
+    chapter = ChapterOutline(
+        number=1,
+        title="开端",
+        summary="主角发现手稿",
+        mood="悬疑",
+        word_target=3000,
+        foreshadowing=["符号"],
+        payoffs=[],
+        pov="主角",
+        information_reveal=["失踪案"],
+        twist="手稿伪造",
+        subplot="牧师秘密",
+    )
+    assert chapter.pov == "主角"
+    assert chapter.twist == "手稿伪造"
+
+
+def test_chapter_outline_new_fields_defaults():
+    chapter = ChapterOutline(number=1, title="开端", summary="摘要", mood="悬疑", word_target=3000)
+    assert chapter.pov == ""
+    assert chapter.information_reveal == []
+    assert chapter.twist is None
+    assert chapter.subplot is None
+
+
+# --- Task 4: StoryContext new fields ---
+
+
+def test_story_context_new_fields():
+    ctx = StoryContext()
+    assert ctx.research_questions == []
+    assert ctx.research_notes == []
+    assert ctx.conflict_design is None

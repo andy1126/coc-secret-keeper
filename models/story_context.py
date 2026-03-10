@@ -1,5 +1,11 @@
 from pydantic import BaseModel, Field
-from models.schemas import WorldSetting, ChapterOutline
+from models.schemas import (
+    WorldSetting,
+    ChapterOutline,
+    ResearchQuestion,
+    ResearchNote,
+    ConflictDesign,
+)
 
 
 class StoryContext(BaseModel):
@@ -9,6 +15,9 @@ class StoryContext(BaseModel):
     chapters: list[str] = Field(default_factory=list, description="已生成章节正文")
     chapter_summaries: list[str] = Field(default_factory=list, description="已完成章节的摘要")
     review_notes: list[str] = Field(default_factory=list, description="审核记录")
+    research_questions: list[ResearchQuestion] = Field(default_factory=list, description="研究问题")
+    research_notes: list[ResearchNote] = Field(default_factory=list, description="研究笔记")
+    conflict_design: ConflictDesign | None = Field(default=None, description="冲突设计")
     current_stage: str = Field(default="brainstorm", description="当前阶段")
 
     def to_dict(self) -> dict:

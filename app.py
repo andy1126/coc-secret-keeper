@@ -24,7 +24,7 @@ def init_session():
 
 
 SAVE_VERSION = 1
-VALID_STAGES = {"brainstorm", "world", "outline", "writing", "review", "complete"}
+VALID_STAGES = {"brainstorm", "design", "writing", "review", "complete"}
 
 
 def build_save_data(
@@ -71,7 +71,7 @@ def render_sidebar():
         context = st.session_state.context
 
         # Stage indicator
-        stages = ["brainstorm", "world", "outline", "writing", "review", "complete"]
+        stages = ["brainstorm", "design", "writing", "review", "complete"]
         current = stages.index(st.session_state.stage)
         st.progress((current) / len(stages))
         st.write(f"当前阶段: {st.session_state.stage}")
@@ -87,6 +87,12 @@ def render_sidebar():
             st.subheader("角色")
             for char in context.world.characters:
                 st.write(f"- {char.name}")
+
+        # Conflict design summary
+        if context.conflict_design:
+            st.subheader("冲突设计")
+            st.write(f"内: {context.conflict_design.inner_conflict[:30]}...")
+            st.write(f"外: {context.conflict_design.outer_conflict[:30]}...")
 
         # Outline preview
         if context.outline:
@@ -139,8 +145,8 @@ def render_sidebar():
                         "pending_review_re_review",
                         "review_cycle",
                         "auto_writing_in_progress",
-                        "show_world_feedback",
-                        "show_outline_feedback",
+                        "show_design_feedback",
+                        "design_review_result",
                         "final_review_result",
                     ]:
                         st.session_state.pop(key, None)
@@ -190,7 +196,14 @@ def render_brainstorm_stage():
         st.rerun()
 
     # 完成检查放在 user_input 块外，确保按钮在 rerun 后仍能渲染
-    required_keys = ["theme", "era", "atmosphere", "protagonist", "writing_style"]
+    required_keys = [
+        "theme",
+        "era",
+        "atmosphere",
+        "protagonist",
+        "writing_style",
+        "target_chapters",
+    ]
     if all(k in st.session_state.context.seed for k in required_keys):
         st.success("故事构思完成！")
 
@@ -222,6 +235,12 @@ def render_brainstorm_stage():
                     ),
                 )
 
+            target_chapters = st.slider(
+                "目标章节数",
+                min_value=5,
+                max_value=20,
+                value=seed.get("target_chapters", 10),
+            )
             notes = st.text_area("其他备注", value=seed.get("notes", ""))
 
             if st.button("保存修改"):
@@ -231,6 +250,7 @@ def render_brainstorm_stage():
                 st.session_state.context.seed["mythos_elements"] = [
                     e.strip() for e in mythos.split(",") if e.strip()
                 ]
+                st.session_state.context.seed["target_chapters"] = target_chapters
                 st.session_state.context.seed["notes"] = notes
                 st.session_state.context.seed["writing_style"] = {
                     "style": writing_style_style,
@@ -240,178 +260,59 @@ def render_brainstorm_stage():
                 st.success("已保存！")
                 st.rerun()
 
-        if st.button("进入世界观构建"):
-            st.session_state.stage = "world"
+        if st.button("进入故事设计"):
+            st.session_state.stage = "design"
             st.rerun()
 
 
-def render_world_stage():
-    """Render world building stage UI."""
-    st.header("世界观构建")
+def render_design_stage():
+    """Render the unified design stage UI (world + conflict + outline)."""
+    st.header("故事设计")
 
     context = st.session_state.context
 
-    # Generate world if not exists
-    if context.world is None:
-        st.info("正在生成世界观...")
+    # Check if design is already complete (world + conflict + outline all exist)
+    design_complete = context.world and context.conflict_design and context.outline
 
-        config = load_config()
-        llm_config = get_agent_config(config, "worldbuilder")
-        llm = get_llm_for_agent(llm_config)
+    if not design_complete:
+        # Check for pending feedback regeneration
+        feedback = st.session_state.pop("design_feedback", None)
+        if feedback:
+            _run_design_generation(context, feedback=feedback)
+            return
 
-        from agents.worldbuilder import WorldbuilderAgent
+        st.write("点击下方按钮，AI 将自动完成以下流程：")
+        st.write(
+            "1. 生成研究问题 → 2. 深度研究 → 3. 构建世界观 + 设计冲突 → 4. 生成大纲 + 叙事审查"
+        )
 
-        agent = WorldbuilderAgent(llm)
-
-        # Get feedback if exists
-        feedback = st.session_state.pop("world_feedback", None)
-
-        with crew_progress("AI 正在构建世界观..."):
-            agent.build_world(context, feedback=feedback)
-
-        st.rerun()
+        if st.button("开始设计"):
+            _run_design_generation(context)
     else:
-        # Check for pending feedback — revise existing world
-        feedback = st.session_state.pop("world_feedback", None)
+        # Check for pending feedback
+        feedback = st.session_state.pop("design_feedback", None)
         if feedback:
-            config = load_config()
-            llm_config = get_agent_config(config, "worldbuilder")
-            llm = get_llm_for_agent(llm_config)
-            from agents.worldbuilder import WorldbuilderAgent
+            _run_design_generation(context, feedback=feedback)
+            return
 
-            agent = WorldbuilderAgent(llm)
-            with crew_progress("AI 正在根据反馈修改世界观..."):
-                agent.build_world(context, feedback=feedback)
-            st.rerun()
+        # Display results in 4 tabs
+        tab_world, tab_conflict, tab_outline, tab_review = st.tabs(
+            ["世界设定", "冲突设计", "故事大纲", "审查意见"]
+        )
 
-        # Display world setting
-        st.subheader("时代背景")
-        st.write(context.world.era)
+        with tab_world:
+            _render_world_tab(context)
 
-        st.subheader("地点")
-        for loc in context.world.locations:
-            st.write(f"- **{loc.name}**: {loc.description}")
+        with tab_conflict:
+            _render_conflict_tab(context)
 
-        st.subheader("神话实体")
-        for entity in context.world.entities:
-            with st.expander(entity.name):
-                st.write(entity.description)
-                st.write(f"影响: {entity.influence}")
+        with tab_outline:
+            _render_outline_tab(context)
 
-        st.subheader("角色")
-        for char in context.world.characters:
-            with st.expander(char.name):
-                st.write(f"背景: {char.background}")
-                st.write(f"性格: {char.personality}")
-                st.write(f"动机: {char.motivation}")
-                st.write(f"弧线: {char.arc}")
+        with tab_review:
+            _render_review_tab()
 
-        # Confirmation and feedback buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("确认并继续"):
-                st.session_state.stage = "outline"
-                st.rerun()
-        with col2:
-            if st.button("重新生成"):
-                st.session_state.show_world_feedback = True
-                st.rerun()
-
-        # Feedback input for regeneration
-        if st.session_state.get("show_world_feedback", False):
-            st.divider()
-            st.subheader("重新生成")
-            feedback = st.text_area(
-                "请输入修改意见（例如：增加更多神秘氛围、修改主角设定等）",
-                key="world_feedback_input",
-            )
-            col3, col4 = st.columns(2)
-            with col3:
-                if st.button("根据意见重新生成"):
-                    st.session_state.world_feedback = feedback
-                    st.session_state.show_world_feedback = False
-                    st.rerun()
-            with col4:
-                if st.button("取消"):
-                    st.session_state.show_world_feedback = False
-                    st.rerun()
-
-
-def render_outline_stage():
-    """Render outline stage UI."""
-    st.header("故事大纲")
-
-    context = st.session_state.context
-
-    if not context.outline:
-        # Check if there's feedback from previous regeneration attempt
-        feedback = st.session_state.pop("outline_feedback", None)
-        target_chapters = st.session_state.pop("outline_target_chapters", 10)
-
-        if feedback:
-            # Regenerating with feedback
-            st.info("正在根据反馈重新生成大纲...")
-
-            config = load_config()
-            llm_config = get_agent_config(config, "outliner")
-            llm = get_llm_for_agent(llm_config)
-
-            from agents.outliner import OutlinerAgent
-
-            agent = OutlinerAgent(llm)
-
-            with crew_progress("AI 正在根据反馈重新生成大纲..."):
-                agent.create_outline(context, target_chapters, feedback=feedback)
-
-            st.rerun()
-        else:
-            # Chapter count selector
-            target_chapters = st.slider("章节数", min_value=5, max_value=20, value=target_chapters)
-
-            if st.button("生成大纲"):
-                config = load_config()
-                llm_config = get_agent_config(config, "outliner")
-                llm = get_llm_for_agent(llm_config)
-
-                from agents.outliner import OutlinerAgent
-
-                agent = OutlinerAgent(llm)
-
-                with crew_progress("AI 正在生成大纲..."):
-                    agent.create_outline(context, target_chapters)
-
-                st.rerun()
-    else:
-        # Check for pending feedback — revise existing outline
-        feedback = st.session_state.pop("outline_feedback", None)
-        target_chapters = st.session_state.pop("outline_target_chapters", None)
-        if feedback:
-            config = load_config()
-            llm_config = get_agent_config(config, "outliner")
-            llm = get_llm_for_agent(llm_config)
-            from agents.outliner import OutlinerAgent
-
-            agent = OutlinerAgent(llm)
-            with crew_progress("AI 正在根据反馈修改大纲..."):
-                agent.create_outline(
-                    context,
-                    target_chapters or len(context.outline),
-                    feedback=feedback,
-                )
-            st.rerun()
-
-        # Display outline
-        for chapter in context.outline:
-            with st.expander(f"第{chapter.number}章: {chapter.title}"):
-                st.write(f"**摘要**: {chapter.summary}")
-                st.write(f"**情绪**: {chapter.mood}")
-                st.write(f"**字数**: {chapter.word_target}")
-                if chapter.foreshadowing:
-                    st.write(f"**伏笔**: {', '.join(chapter.foreshadowing)}")
-                if chapter.payoffs:
-                    st.write(f"**回收**: {', '.join(chapter.payoffs)}")
-
-        # Confirmation and feedback buttons
+        # Action buttons
         col1, col2 = st.columns(2)
         with col1:
             if st.button("确认并继续"):
@@ -419,34 +320,221 @@ def render_outline_stage():
                 st.rerun()
         with col2:
             if st.button("重新生成"):
-                st.session_state.show_outline_feedback = True
+                st.session_state.show_design_feedback = True
                 st.rerun()
 
-        # Feedback input for regeneration
-        if st.session_state.get("show_outline_feedback", False):
+        if st.session_state.get("show_design_feedback", False):
             st.divider()
             st.subheader("重新生成")
             feedback = st.text_area(
-                "请输入修改意见（例如：调整章节节奏、增加更多伏笔等）", key="outline_feedback_input"
-            )
-            target_chapters = st.slider(
-                "章节数",
-                min_value=5,
-                max_value=20,
-                value=len(context.outline) if context.outline else 10,
-                key="outline_feedback_chapters",
+                "请输入修改意见（将重新运行完整设计流程）",
+                key="design_feedback_input",
             )
             col3, col4 = st.columns(2)
             with col3:
                 if st.button("根据意见重新生成"):
-                    st.session_state.outline_feedback = feedback
-                    st.session_state.outline_target_chapters = target_chapters
-                    st.session_state.show_outline_feedback = False
+                    # Clear existing design data for full regeneration
+                    context.world = None
+                    context.conflict_design = None
+                    context.outline = []
+                    context.research_questions = []
+                    context.research_notes = []
+                    st.session_state.design_feedback = feedback
+                    st.session_state.show_design_feedback = False
                     st.rerun()
             with col4:
                 if st.button("取消"):
-                    st.session_state.show_outline_feedback = False
+                    st.session_state.show_design_feedback = False
                     st.rerun()
+
+
+def _run_design_generation(context, feedback=None):
+    """Run the full design team pipeline."""
+    config = load_config()
+
+    from agents.worldbuilder import WorldbuilderAgent
+    from agents.researcher import ResearcherAgent
+    from agents.conflict_architect import ConflictArchitectAgent
+    from agents.outliner import OutlinerAgent
+    from agents.narrative_reviewer import NarrativeReviewerAgent
+    from agents.design_team import run_design_team
+
+    worldbuilder = WorldbuilderAgent(get_llm_for_agent(get_agent_config(config, "worldbuilder")))
+    researcher = ResearcherAgent(get_llm_for_agent(get_agent_config(config, "researcher")))
+    conflict_architect = ConflictArchitectAgent(
+        get_llm_for_agent(get_agent_config(config, "conflict_architect"))
+    )
+    outliner = OutlinerAgent(get_llm_for_agent(get_agent_config(config, "outliner")))
+    reviewer = NarrativeReviewerAgent(
+        get_llm_for_agent(get_agent_config(config, "narrative_reviewer"))
+    )
+
+    # If feedback provided, inject into seed temporarily
+    if feedback:
+        context.seed["_design_feedback"] = feedback
+
+    # Progress display
+    progress_placeholder = st.empty()
+    phase_status = {}
+
+    def on_progress(phase, status):
+        phase_labels = {
+            "research_questions": "生成研究问题",
+            "research": "深度研究",
+            "world_building": "构建世界观",
+            "conflict_design": "设计冲突结构",
+            "outline": "生成大纲",
+            "review": "叙事审查",
+        }
+        phase_status[phase] = status
+        lines = []
+        for p, label in phase_labels.items():
+            if p in phase_status:
+                icon = "✅" if phase_status[p] == "done" else "⏳"
+                lines.append(f"{icon} {label}")
+            else:
+                lines.append(f"⬜ {label}")
+        progress_placeholder.markdown("\n\n".join(lines))
+
+    with crew_progress("AI 设计团队正在协作..."):
+        result = run_design_team(
+            context,
+            worldbuilder,
+            researcher,
+            conflict_architect,
+            outliner,
+            reviewer,
+            on_progress=on_progress,
+        )
+
+    # Clean up temp feedback
+    context.seed.pop("_design_feedback", None)
+
+    # Store review result for display
+    st.session_state.design_review_result = {
+        "passed": result.review.passed,
+        "issues": [i.model_dump() for i in result.review.issues],
+        "strengths": result.review.strengths,
+        "iterations": result.iterations,
+    }
+
+    st.rerun()
+
+
+def _render_world_tab(context):
+    """Render world setting tab."""
+    world = context.world
+    st.subheader("时代背景")
+    st.write(world.era)
+
+    st.subheader("地点")
+    for loc in world.locations:
+        st.write(f"- **{loc.name}**: {loc.description}")
+
+    st.subheader("神话实体")
+    for entity in world.entities:
+        with st.expander(entity.name):
+            st.write(entity.description)
+            st.write(f"影响: {entity.influence}")
+
+    st.subheader("角色")
+    for char in world.characters:
+        with st.expander(char.name):
+            st.write(f"背景: {char.background}")
+            st.write(f"性格: {char.personality}")
+            st.write(f"动机: {char.motivation}")
+            st.write(f"弧线: {char.arc}")
+
+    if world.secrets:
+        st.subheader("隐藏秘密")
+        for secret in world.secrets:
+            layer_label = {1: "表面线索", 2: "中层真相", 3: "核心真相"}.get(
+                secret.layer, f"层级{secret.layer}"
+            )
+            st.write(f"- **[{layer_label}]** {secret.content}")
+            st.caption(f"知情者: {', '.join(secret.known_by)}")
+
+    if world.tensions:
+        st.subheader("暗流")
+        for tension in world.tensions:
+            st.write(f"- **{' vs '.join(tension.parties)}** — {tension.nature} ({tension.status})")
+
+    if world.timeline:
+        st.subheader("前史")
+        for event in world.timeline:
+            st.write(f"- **{event.when}**: {event.event}")
+            st.caption(f"影响: {event.consequences}")
+
+
+def _render_conflict_tab(context):
+    """Render conflict design tab."""
+    cd = context.conflict_design
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("内在冲突")
+        st.write(cd.inner_conflict)
+    with col2:
+        st.subheader("外在冲突")
+        st.write(cd.outer_conflict)
+
+    st.divider()
+    st.subheader("戏剧节拍")
+    beats = [
+        ("激励事件", cd.inciting_incident),
+        ("中点转折", cd.midpoint_reversal),
+        ("一无所有时刻", cd.all_is_lost),
+        ("灵魂暗夜", cd.dark_night_of_soul),
+        ("高潮", cd.climax),
+        ("解决/余韵", cd.resolution),
+    ]
+    for label, content in beats:
+        st.write(f"**{label}**: {content}")
+
+
+def _render_outline_tab(context):
+    """Render outline tab."""
+    for chapter in context.outline:
+        with st.expander(f"第{chapter.number}章: {chapter.title}"):
+            st.write(f"**摘要**: {chapter.summary}")
+            st.write(f"**情绪**: {chapter.mood}")
+            st.write(f"**字数**: {chapter.word_target}")
+            if chapter.pov:
+                st.write(f"**视角**: {chapter.pov}")
+            if chapter.foreshadowing:
+                st.write(f"**伏笔**: {', '.join(chapter.foreshadowing)}")
+            if chapter.payoffs:
+                st.write(f"**回收**: {', '.join(chapter.payoffs)}")
+            if chapter.information_reveal:
+                st.write(f"**揭示信息**: {', '.join(chapter.information_reveal)}")
+            if chapter.twist:
+                st.write(f"**反转**: {chapter.twist}")
+            if chapter.subplot:
+                st.write(f"**副线**: {chapter.subplot}")
+
+
+def _render_review_tab():
+    """Render narrative review tab."""
+    review_data = st.session_state.get("design_review_result")
+    if not review_data:
+        st.info("暂无审查结果")
+        return
+
+    if review_data["passed"]:
+        st.success(f"叙事审查通过！（迭代 {review_data['iterations']} 轮）")
+    else:
+        st.warning(f"叙事审查发现问题（迭代 {review_data['iterations']} 轮）")
+
+    if review_data["issues"]:
+        st.subheader("问题")
+        for issue in review_data["issues"]:
+            severity_icon = "🔴" if issue["severity"] == "major" else "🟡"
+            st.write(f"{severity_icon} **[{issue['dimension']}]** {issue['description']}")
+            st.caption(f"建议: {issue['suggestion']} (目标: {issue['target']})")
+
+    if review_data["strengths"]:
+        st.subheader("亮点")
+        for s in review_data["strengths"]:
+            st.write(f"- {s}")
 
 
 def _write_review_one_chapter(writer, reviewer, context, chapter):
@@ -897,7 +985,16 @@ def render_settings():
     providers = config.llm.get("providers", {})
     provider_names = list(providers.keys())
     type_options = ["openai_compatible", "anthropic_compatible"]
-    agent_names = ["brainstorm", "worldbuilder", "outliner", "writer", "reviewer"]
+    agent_names = [
+        "brainstorm",
+        "worldbuilder",
+        "researcher",
+        "conflict_architect",
+        "outliner",
+        "narrative_reviewer",
+        "writer",
+        "reviewer",
+    ]
 
     st.subheader("LLM Provider 配置")
 
@@ -1020,10 +1117,8 @@ def main():
 
     if stage == "brainstorm":
         render_brainstorm_stage()
-    elif stage == "world":
-        render_world_stage()
-    elif stage == "outline":
-        render_outline_stage()
+    elif stage == "design":
+        render_design_stage()
     elif stage == "writing":
         render_writing_stage()
     elif stage == "review":

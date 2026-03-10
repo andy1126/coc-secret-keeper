@@ -67,15 +67,26 @@ class OutlinerAgent:
         """Create chapter outline from world setting."""
         world_dict = context.world.model_dump() if context.world else {}
 
-        feedback_section = f"""
+        feedback_section = (
+            f"""
 
 用户反馈（请根据以下反馈修改大纲）:
 {feedback}
-""" if feedback else ""
+"""
+            if feedback
+            else ""
+        )
 
         existing_outline = (
             [c.model_dump() for c in context.outline] if context.outline and feedback else None
         )
+
+        conflict_section = ""
+        if context.conflict_design:
+            conflict_section = f"""
+冲突设计（请以此作为故事骨架安排章节）:
+{json.dumps(context.conflict_design.model_dump(), ensure_ascii=False, indent=2)}
+"""
 
         if existing_outline:
             task_desc = f"""
@@ -87,6 +98,7 @@ Story Seed:
 
 World Setting:
 {json.dumps(world_dict, ensure_ascii=False, indent=2)}
+{conflict_section}
 
 Current Outline:
 {json.dumps(existing_outline, ensure_ascii=False, indent=2)}
@@ -106,6 +118,7 @@ Story Seed:
 
 World Setting:
 {json.dumps(world_dict, ensure_ascii=False, indent=2)}
+{conflict_section}
 
 Target number of chapters: {target_chapters}
 
