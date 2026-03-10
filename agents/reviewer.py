@@ -83,8 +83,18 @@ class ReviewerAgent:
 
         # Get outline for this chapter
         chapter_outline = None
+        chapter_outline_obj = None
         if context.outline and chapter_number <= len(context.outline):
-            chapter_outline = context.outline[chapter_number - 1].model_dump()
+            chapter_outline_obj = context.outline[chapter_number - 1]
+            chapter_outline = chapter_outline_obj.model_dump()
+
+        beats_check = ""
+        if chapter_outline_obj and chapter_outline_obj.key_beats:
+            beats_list = "\n".join(f"  - {b}" for b in chapter_outline_obj.key_beats)
+            beats_check = (
+                f"4. Check each key beat below. Report ANY missing beat as"
+                f' category "completeness" severity "major":\n{beats_list}'
+            )
 
         previous_text = (
             "\n\n".join(
@@ -93,6 +103,22 @@ class ReviewerAgent:
             if context.chapter_summaries
             else "无"
         )
+
+        previous_ending = ""
+        if chapter_number > 1 and chapter_number - 2 < len(context.chapter_endings):
+            previous_ending = (
+                f"\nPrevious Chapter Ending (last 500 chars):\n"
+                f"{context.chapter_endings[chapter_number - 2]}"
+            )
+
+        transition_check = ""
+        if chapter_number > 1:
+            transition_check = (
+                "5. Does the chapter opening naturally connect to the previous chapter's ending?\n"
+                "Check for scene continuity, emotional flow, and logical progression.\n"
+                'If there is a jarring disconnect, report as category "completeness"'
+                ' severity "major".'
+            )
 
         task_desc = f"""
 Review chapter {chapter_number}.
@@ -105,6 +131,7 @@ Chapter Outline:
 
 Previous Chapters:
 {previous_text}
+{previous_ending}
 
 Chapter to Review:
 {chapter_text}
@@ -114,6 +141,8 @@ IMPORTANT: Check for completeness issues:
 2. Are all foreshadowing/payoff items from the outline addressed?
 3. Is the text complete -- does it end with a proper sentence, or truncated mid-sentence?
 If truncated or missing outline content, report as category "completeness" with severity "major".
+{beats_check}
+{transition_check}
 
 Provide a complete review following the format in your instructions.
 """

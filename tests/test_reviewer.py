@@ -159,3 +159,83 @@ def test_final_review_guard_mismatch():
 
     with pytest.raises(ValueError, match="chapter_summaries"):
         agent.final_review(context)
+
+
+def test_review_includes_key_beats_check():
+    """Reviewer task_desc should include key_beats check items."""
+    mock_llm = Mock()
+    agent = ReviewerAgent(llm=mock_llm)
+
+    context = StoryContext()
+    context.seed = {"theme": "调查"}
+    context.outline = [
+        ChapterOutline(
+            number=1,
+            title="开端",
+            summary="开始",
+            mood="悬疑",
+            word_target=1000,
+            key_beats=["发现古籍", "与馆长对话"],
+        )
+    ]
+
+    mock_result = (
+        '```json\n{"passed": true, "issues": [], "strengths": [], "overall_assessment": "ok"}\n```'
+    )
+
+    with patch.object(agent, "_run_agent", return_value=mock_result) as mock_run:
+        agent.review_chapter(context, chapter_number=1, chapter_text="测试文本")
+
+    task_desc = mock_run.call_args[0][0]
+    assert "发现古籍" in task_desc
+    assert "与馆长对话" in task_desc
+    assert "key beat" in task_desc
+
+
+def test_review_includes_previous_ending():
+    """Non-first chapter review should include previous chapter ending."""
+    mock_llm = Mock()
+    agent = ReviewerAgent(llm=mock_llm)
+
+    context = StoryContext()
+    context.seed = {"theme": "调查"}
+    context.chapter_endings = ["上一章末尾文本"]
+    context.outline = [
+        ChapterOutline(number=1, title="开端", summary="开始", mood="悬疑", word_target=1000),
+        ChapterOutline(number=2, title="深入", summary="深入", mood="紧张", word_target=1000),
+    ]
+
+    mock_result = (
+        '```json\n{"passed": true, "issues": [], "strengths": [], "overall_assessment": "ok"}\n```'
+    )
+
+    with patch.object(agent, "_run_agent", return_value=mock_result) as mock_run:
+        agent.review_chapter(context, chapter_number=2, chapter_text="测试文本")
+
+    task_desc = mock_run.call_args[0][0]
+    assert "上一章末尾文本" in task_desc
+    assert "Previous Chapter Ending" in task_desc
+
+
+def test_review_includes_transition_check():
+    """Non-first chapter review should include transition check."""
+    mock_llm = Mock()
+    agent = ReviewerAgent(llm=mock_llm)
+
+    context = StoryContext()
+    context.seed = {"theme": "调查"}
+    context.outline = [
+        ChapterOutline(number=1, title="开端", summary="开始", mood="悬疑", word_target=1000),
+        ChapterOutline(number=2, title="深入", summary="深入", mood="紧张", word_target=1000),
+    ]
+
+    mock_result = (
+        '```json\n{"passed": true, "issues": [], "strengths": [], "overall_assessment": "ok"}\n```'
+    )
+
+    with patch.object(agent, "_run_agent", return_value=mock_result) as mock_run:
+        agent.review_chapter(context, chapter_number=2, chapter_text="测试文本")
+
+    task_desc = mock_run.call_args[0][0]
+    assert "naturally connect" in task_desc
+    assert "scene continuity" in task_desc

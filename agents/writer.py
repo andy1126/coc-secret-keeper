@@ -63,6 +63,27 @@ class WriterAgent:
             else "无"
         )
 
+        beats_checklist = ""
+        if chapter.key_beats:
+            beats_list = "\n".join(f"  {i+1}. {beat}" for i, beat in enumerate(chapter.key_beats))
+            beats_checklist = f"""
+Key Beats Checklist (MUST cover ALL of these in order):
+{beats_list}
+"""
+
+        next_chapter_info = "这是最后一章，请确保给出合适的结局。"
+        if chapter.number < len(context.outline):
+            next_ch = context.outline[chapter.number]
+            next_chapter_info = (
+                f"下一章：第{next_ch.number}章「{next_ch.title}」\n"
+                f"情绪基调：{next_ch.mood}\n"
+                f"摘要：{next_ch.summary}"
+            )
+
+        previous_ending = "无（这是第一章）"
+        if context.chapter_endings:
+            previous_ending = context.chapter_endings[-1]
+
         task_desc = f"""
 Write chapter {chapter.number}: "{chapter.title}"
 
@@ -75,14 +96,29 @@ Chapter Outline:
 Previous Chapters Summary:
 {previous_chapters}
 
+Previous Chapter Ending (last 500 chars):
+{previous_ending}
+
+The opening of this chapter must naturally continue from the above ending.
+{beats_checklist}
+Next Chapter Preview:
+{next_chapter_info}
+
+Ensure the chapter ending naturally sets up the transition to the next chapter.
+
 Write the chapter content in Chinese. Target word count: {chapter.word_target}.
 Maintain the mood: {chapter.mood}.
 Include foreshadowing: {chapter.foreshadowing}
 Include payoffs: {chapter.payoffs}
+
+IMPORTANT: You MUST cover every key beat listed above. Do not conclude the chapter
+until all beats have been addressed. Check this list before writing your ending.
 """
 
         result = self._run_agent(task_desc)
         context.chapters.append(result)
+        ending = result[-500:] if len(result) > 500 else result
+        context.chapter_endings.append(ending)
         return result
 
     def summarize_chapter(self, chapter: ChapterOutline, chapter_text: str) -> str:

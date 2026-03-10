@@ -17,7 +17,7 @@ Writer 生成章节时经常出现两个问题：
 | 4 | Reviewer 对照 key_beats 逐条检查 | 大纲覆盖 |
 | 5 | Writer task_desc 传入下一章大纲预览 | 衔接 |
 | 6 | Writer task_desc 传入上一章末尾原文 | 衔接 |
-| 7 | Writer summarize_chapter 嵌入末尾原文 | 衔接 |
+| 7 | StoryContext 新增 `chapter_endings` + Writer 写入末尾原文 | 衔接 |
 | 8 | Reviewer task_desc 传入上一章末尾 + 检查衔接 | 衔接 |
 | 9 | Writer/Reviewer prompt 更新 | 两者 |
 | 10 | 大纲 UI 展示 key_beats | UI 适配 |
@@ -39,6 +39,10 @@ class ChapterOutline(BaseModel):
     word_target: int = Field(description="目标字数")
     foreshadowing: list[str] = Field(default_factory=list, description="伏笔列表")
     payoffs: list[str] = Field(default_factory=list, description="回收点列表")
+    pov: str = Field(default="", description="主要叙述视角")
+    information_reveal: list[str] = Field(default_factory=list, description="本章揭示的信息")
+    twist: str | None = Field(default=None, description="本章反转")
+    subplot: str | None = Field(default=None, description="本章推进的副线")
     key_beats: list[str] = Field(default_factory=list, description="关键情节节拍")  # NEW
 ```
 
@@ -138,11 +142,12 @@ Ensure the chapter ending naturally sets up the transition to the next chapter.
 
 **文件**: `agents/writer.py` — `write_chapter()` 方法
 
+从 `chapter_endings` 读取（由第 7 项写入），避免每次从完整章节文本截取：
+
 ```python
 previous_ending = "无（这是第一章）"
-if context.chapters:
-    last_chapter_text = context.chapters[-1]
-    previous_ending = last_chapter_text[-500:] if len(last_chapter_text) > 500 else last_chapter_text
+if context.chapter_endings:
+    previous_ending = context.chapter_endings[-1]
 ```
 
 task_desc 追加：
@@ -153,27 +158,56 @@ Previous Chapter Ending (last 500 chars):
 The opening of this chapter must naturally continue from the above ending.
 ```
 
-### 7. Writer: 摘要中嵌入末尾原文
+### 7. StoryContext 新增 `chapter_endings` + Writer 写入末尾原文
 
-**文件**: `agents/writer.py` — `summarize_chapter()` 方法
+将末尾原文存为独立字段而非嵌入摘要，避免摘要膨胀（摘要会在后续所有章节中累积传入，token 消耗翻倍）。末尾原文只需传给相邻章节。
 
-在摘要 prompt 的要求列表中增加第 5 条：
+**文件**: `models/story_context.py`
+
+```python
+class StoryContext(BaseModel):
+    # ... existing fields ...
+    chapter_endings: list[str] = Field(default_factory=list, description="各章末尾原文（最后500字）")
 ```
-5. 章节末尾原文（最后200字，原样引用，用「」标注）
+
+**文件**: `agents/writer.py` — `write_chapter()` 方法
+
+在 `context.chapters.append(result)` 之后追加：
+```python
+ending = result[-500:] if len(result) > 500 else result
+context.chapter_endings.append(ending)
+```
+
+**文件**: `agents/writer.py` — `write_chapter()` 方法（上一章末尾来源改用 chapter_endings）
+
+将第 6 项的上一章末尾取值改为：
+```python
+previous_ending = "无（这是第一章）"
+if context.chapter_endings:
+    previous_ending = context.chapter_endings[-1]
+```
+
+**文件**: `agents/reviewer.py` — `review_chapter()` 方法（同理改用 chapter_endings）
+
+```python
+previous_ending = ""
+if chapter_number > 1 and chapter_number - 2 < len(context.chapter_endings):
+    previous_ending = f"\nPrevious Chapter Ending (last 500 chars):\n{context.chapter_endings[chapter_number - 2]}"
 ```
 
 ### 8. Reviewer: 传入上一章末尾 + 检查衔接
 
 **文件**: `agents/reviewer.py` — `review_chapter()` 方法
 
-在构建 `previous_text` 之后，额外传入上一章末尾原文：
+在构建 `previous_text` 之后，额外传入上一章末尾原文（取自 `chapter_endings`，已在第 7 项中实现）：
 
 ```python
 previous_ending = ""
-if chapter_number > 1 and len(context.chapters) >= chapter_number - 1:
-    prev_text = context.chapters[chapter_number - 2]
-    ending = prev_text[-500:] if len(prev_text) > 500 else prev_text
-    previous_ending = f"\nPrevious Chapter Ending (last 500 chars):\n{ending}"
+if chapter_number > 1 and chapter_number - 2 < len(context.chapter_endings):
+    previous_ending = (
+        f"\nPrevious Chapter Ending (last 500 chars):\n"
+        f"{context.chapter_endings[chapter_number - 2]}"
+    )
 ```
 
 在 IMPORTANT 检查项中追加衔接检查（第 4 或第 5 条）：
@@ -200,9 +234,9 @@ If there is a jarring disconnect, report as category "completeness" severity "ma
 
 ### 10. 大纲 UI 展示 key_beats
 
-**文件**: `app.py` — `render_outline_stage()` 中大纲展示部分（约 L404-412）
+**文件**: `app.py` — `_render_outline_tab()` 函数中大纲展示部分
 
-在 foreshadowing/payoffs 展示之后增加：
+在 subplot 展示之后增加：
 ```python
 if chapter.key_beats:
     st.write(f"**关键节拍**: {', '.join(chapter.key_beats)}")
@@ -215,18 +249,85 @@ if chapter.key_beats:
 | 文件 | 改动内容 |
 |------|---------|
 | `models/schemas.py` | ChapterOutline 加 `key_beats` 字段 |
+| `models/story_context.py` | StoryContext 加 `chapter_endings` 字段 |
 | `prompts/outliner.md` | 职责 + 输出格式 + 设计原则 加 key_beats |
-| `agents/writer.py` | `write_chapter()` 加 key_beats 清单 + 下一章预览 + 上一章末尾；`summarize_chapter()` 加末尾原文 |
-| `agents/reviewer.py` | `review_chapter()` 加 key_beats 逐条检查 + 上一章末尾 + 衔接检查 |
+| `agents/writer.py` | `write_chapter()` 加 key_beats 清单 + 下一章预览 + 上一章末尾 + 写入 chapter_endings |
+| `agents/reviewer.py` | `review_chapter()` 加 key_beats 逐条检查 + 上一章末尾（从 chapter_endings 读取）+ 衔接检查 |
 | `prompts/writer.md` | 连贯性部分加 key_beats + 衔接指引 |
 | `prompts/reviewer.md` | 大问题分类加 key_beats 遗漏 + 衔接断裂 |
-| `app.py` | 大纲展示加 key_beats 显示 |
+| `app.py` | `_render_outline_tab()` 加 key_beats 显示 |
+| `tests/test_schemas.py` | key_beats 默认值测试 |
+| `tests/test_writer.py` | key_beats/下一章预览/上一章末尾 出现在 task_desc 中的测试 |
+| `tests/test_reviewer.py` | key_beats 检查 + 衔接检查 出现在 task_desc 中的测试 |
 
 ## 验证
 
-1. `uv run ruff check .` — 无 lint 错误
-2. `uv run black --check .` — 格式正确
-3. `uv run mypy .` — 类型检查通过
-4. `uv run pytest tests/` — 现有测试通过（key_beats 有 default_factory，向后兼容）
-5. 手动：加载旧存档确认 ChapterOutline 无 key_beats 时不报错
-6. 手动：`uv run streamlit run app.py` 走完 outline → writing 流程确认 key_beats 展示和覆盖效果
+### 单元测试（新增）
+
+**文件**: `tests/test_schemas.py`
+
+```python
+def test_chapter_outline_key_beats_default():
+    """key_beats 默认空列表，向后兼容。"""
+    chapter = ChapterOutline(number=1, title="开端", summary="摘要", mood="悬疑", word_target=3000)
+    assert chapter.key_beats == []
+
+
+def test_chapter_outline_with_key_beats():
+    chapter = ChapterOutline(
+        number=1, title="开端", summary="摘要", mood="悬疑", word_target=3000,
+        key_beats=["发现古籍", "与馆长对话", "听到低语"],
+    )
+    assert len(chapter.key_beats) == 3
+```
+
+**文件**: `tests/test_writer.py`
+
+```python
+def test_write_chapter_includes_key_beats():
+    """key_beats 应作为清单出现在 task_desc 中。"""
+    # Mock _run_agent, 验证 call_args 中包含 "Key Beats Checklist"
+    # 和每个 beat 文本
+
+
+def test_write_chapter_includes_next_chapter_preview():
+    """非最后一章时应包含下一章预览。"""
+    # 构建 context.outline 含 2 章, 写第 1 章
+    # 验证 task_desc 包含第 2 章标题
+
+
+def test_write_chapter_includes_previous_ending():
+    """非第一章时应包含上一章末尾原文。"""
+    # context.chapter_endings = ["...上一章末尾..."]
+    # 验证 task_desc 包含该文本
+
+
+def test_write_chapter_appends_chapter_ending():
+    """write_chapter 应将末尾 500 字写入 chapter_endings。"""
+    # 验证 context.chapter_endings 长度增加 1
+```
+
+**文件**: `tests/test_reviewer.py`
+
+```python
+def test_review_includes_key_beats_check():
+    """Reviewer task_desc 应包含 key_beats 逐条检查。"""
+    # 构建含 key_beats 的 outline, 验证 task_desc
+
+
+def test_review_includes_previous_ending():
+    """非第一章时 Reviewer 应包含上一章末尾。"""
+    # context.chapter_endings = ["...末尾..."]
+    # 验证 task_desc 包含该文本
+```
+
+### 自动化检查
+
+1. `uv run pytest tests/` — 所有测试通过（含新增测试）
+2. `uv run ruff check .` — 无 lint 错误
+3. `uv run black --check .` — 格式正确
+
+### 手动验证
+
+4. 加载旧存档确认 ChapterOutline 无 key_beats 时不报错
+5. `uv run streamlit run app.py` 走完 design → writing 流程确认 key_beats 展示和覆盖效果

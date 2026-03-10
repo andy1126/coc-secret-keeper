@@ -510,6 +510,8 @@ def _render_outline_tab(context):
                 st.write(f"**反转**: {chapter.twist}")
             if chapter.subplot:
                 st.write(f"**副线**: {chapter.subplot}")
+            if chapter.key_beats:
+                st.write(f"**关键节拍**: {', '.join(chapter.key_beats)}")
 
 
 def _render_review_tab():

@@ -114,6 +114,7 @@ class ChapterOutline(BaseModel):
     information_reveal: list[str] = Field(default_factory=list, description="本章揭示的信息")
     twist: str | None = Field(default=None, description="本章反转")
     subplot: str | None = Field(default=None, description="本章推进的副线")
+    key_beats: list[str] = Field(default_factory=list, description="关键情节节拍")
 
 
 class ReviewIssue(BaseModel):

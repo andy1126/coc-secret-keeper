@@ -18,6 +18,9 @@ class StoryContext(BaseModel):
     research_questions: list[ResearchQuestion] = Field(default_factory=list, description="研究问题")
     research_notes: list[ResearchNote] = Field(default_factory=list, description="研究笔记")
     conflict_design: ConflictDesign | None = Field(default=None, description="冲突设计")
+    chapter_endings: list[str] = Field(
+        default_factory=list, description="各章末尾原文（最后500字）"
+    )
     current_stage: str = Field(default="brainstorm", description="当前阶段")
 
     def to_dict(self) -> dict:

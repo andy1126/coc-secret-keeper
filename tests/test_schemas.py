@@ -226,3 +226,32 @@ def test_story_context_new_fields():
     assert ctx.research_questions == []
     assert ctx.research_notes == []
     assert ctx.conflict_design is None
+
+
+# --- key_beats ---
+
+
+def test_chapter_outline_key_beats_default():
+    """key_beats defaults to empty list for backward compatibility."""
+    chapter = ChapterOutline(number=1, title="开端", summary="摘要", mood="悬疑", word_target=3000)
+    assert chapter.key_beats == []
+
+
+def test_chapter_outline_with_key_beats():
+    chapter = ChapterOutline(
+        number=1,
+        title="开端",
+        summary="摘要",
+        mood="悬疑",
+        word_target=3000,
+        key_beats=["发现古籍", "与馆长对话", "听到低语"],
+    )
+    assert len(chapter.key_beats) == 3
+
+
+# --- chapter_endings ---
+
+
+def test_story_context_chapter_endings_default():
+    ctx = StoryContext()
+    assert ctx.chapter_endings == []
