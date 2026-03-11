@@ -97,13 +97,14 @@ class NarrativeReviewerAgent:
 章节大纲:
 {json.dumps(outline_dict, ensure_ascii=False, indent=2)}
 
-请从以下6个维度进行审查：
+请从以下7个维度进行审查：
 1. tension_sufficiency（张力充分性）：每2-3章是否有明确的冲突驱动？有没有"空"章节？
 2. information_asymmetry（信息不对称）：读者与角色之间是否有有意义的信息差？秘密揭示节奏是否合理？
-3. reversal_space（反转空间）：是否至少有一个中段反转和一个高潮反转？反转是否有前期伏笔支撑？
+3. reversal_space（反转空间）：熔炉区（crucible）是否包含至少一个反转节拍？反转是否有铺垫区伏笔支撑？
 4. asset_utilization（资产利用率）：世界设定中的地点/角色/实体/暗流是否在大纲中实际使用？有没有"道具"？
-5. character_agency（角色能动性）：剧情是否由角色的选择→后果驱动，而非被动遭遇？
+5. character_agency（角色能动性）：熔炉区是否包含主角主动选择的节拍？剧情是否由选择→后果驱动？
 6. multi_thread（多线编织）：是否至少有一条副线？主副线是否交汇？
+7. thread_utilization（冲突线索利用率）：冲突设计中的所有线索是否都在节拍中被推进？各线索分布是否合理？
 
 对每个发现的问题，请标注修改目标 target：
 - "world"：需要修改世界设定

@@ -4,6 +4,9 @@ from models.story_context import StoryContext
 from models.schemas import (
     ChapterOutline,
     ConflictDesign,
+    ConflictThread,
+    DramaticBeat,
+    StoryZone,
     WorldSetting,
     Location,
     Entity,
@@ -68,14 +71,38 @@ def test_create_outline_with_conflict_design():
         ],
     )
     context.conflict_design = ConflictDesign(
-        inner_conflict="渴望vs恐惧",
-        outer_conflict="馆长阻止",
-        inciting_incident="发现笔记",
-        midpoint_reversal="盟友是邪教",
-        all_is_lost="精神病院",
-        dark_night_of_soul="怀疑自己",
-        climax="直面仪式",
-        resolution="真相掩埋",
+        narrative_strategy="逐步揭示",
+        threads=[
+            ConflictThread(
+                name="求知之祸", thread_type="epistemic", description="渴望vs恐惧", stakes="理智"
+            ),
+            ConflictThread(
+                name="邪教操控", thread_type="societal", description="馆长阻止", stakes="生命"
+            ),
+        ],
+        zones=[
+            StoryZone(
+                zone="setup",
+                beats=[DramaticBeat(name="发现笔记", description="发现笔记", threads=["求知之祸"])],
+            ),
+            StoryZone(
+                zone="crucible",
+                beats=[
+                    DramaticBeat(
+                        name="盟友背叛", description="盟友是邪教", threads=["求知之祸", "邪教操控"]
+                    ),
+                    DramaticBeat(
+                        name="直面仪式", description="直面仪式", threads=["求知之祸", "邪教操控"]
+                    ),
+                ],
+            ),
+            StoryZone(
+                zone="aftermath",
+                beats=[DramaticBeat(name="真相掩埋", description="真相掩埋", threads=["求知之祸"])],
+            ),
+        ],
+        tension_shape="慢炖型",
+        thematic_throughline="知识即诅咒",
     )
 
     mock_outline_json = """

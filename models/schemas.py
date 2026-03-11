@@ -1,4 +1,18 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
+
+THREAD_TYPE = Literal[
+    "epistemic",
+    "ontological",
+    "moral",
+    "relational",
+    "survival",
+    "cosmic",
+    "societal",
+]
+
+ZONE_TYPE = Literal["setup", "crucible", "aftermath"]
 
 
 class Character(BaseModel):
@@ -50,15 +64,130 @@ class ResearchNote(BaseModel):
     sources: list[str] = Field(default_factory=list, description="参考来源")
 
 
+class ConflictThread(BaseModel):
+    name: str = Field(description="线索名称")
+    thread_type: THREAD_TYPE = Field(description="冲突类型")
+    description: str = Field(description="描述")
+    stakes: str = Field(description="风险")
+
+
+class DramaticBeat(BaseModel):
+    name: str = Field(description="节拍名称（故事专属）")
+    description: str = Field(description="具体内容")
+    threads: list[str] = Field(description="推进哪些冲突线索")
+
+
+class StoryZone(BaseModel):
+    zone: ZONE_TYPE = Field(description="叙事区域")
+    beats: list[DramaticBeat] = Field(description="该区域的节拍")
+
+
 class ConflictDesign(BaseModel):
-    inner_conflict: str = Field(description="主角内在冲突")
-    outer_conflict: str = Field(description="主要外在冲突")
-    inciting_incident: str = Field(description="激励事件")
-    midpoint_reversal: str = Field(description="中点转折")
-    all_is_lost: str = Field(description="一无所有时刻")
-    dark_night_of_soul: str = Field(description="灵魂暗夜")
-    climax: str = Field(description="高潮")
-    resolution: str = Field(description="解决/余韵")
+    narrative_strategy: str = Field(description="叙事策略")
+    threads: list[ConflictThread] = Field(description="冲突线索")
+    zones: list[StoryZone] = Field(description="叙事区域")
+    tension_shape: str = Field(description="张力曲线描述")
+    thematic_throughline: str = Field(description="主题贯穿线")
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_format(cls, data):
+        """Auto-migrate old 8-beat format to new zone/thread structure."""
+        if not isinstance(data, dict):
+            return data
+        if "inner_conflict" not in data:
+            return data
+
+        inner = data.pop("inner_conflict", "")
+        outer = data.pop("outer_conflict", "")
+        inciting = data.pop("inciting_incident", "")
+        midpoint = data.pop("midpoint_reversal", "")
+        all_lost = data.pop("all_is_lost", "")
+        dark_night = data.pop("dark_night_of_soul", "")
+        climax = data.pop("climax", "")
+        resolution = data.pop("resolution", "")
+
+        data.setdefault("narrative_strategy", "（从旧格式迁移）")
+        data.setdefault("tension_shape", "（从旧格式迁移）")
+        data.setdefault("thematic_throughline", "（从旧格式迁移）")
+        data.setdefault(
+            "threads",
+            [
+                {
+                    "name": "内在冲突",
+                    "thread_type": "moral",
+                    "description": inner,
+                    "stakes": inner,
+                },
+                {
+                    "name": "外在冲突",
+                    "thread_type": "survival",
+                    "description": outer,
+                    "stakes": outer,
+                },
+            ],
+        )
+        data.setdefault(
+            "zones",
+            [
+                {
+                    "zone": "setup",
+                    "beats": [
+                        {
+                            "name": "激励事件",
+                            "description": inciting,
+                            "threads": ["内在冲突", "外在冲突"],
+                        }
+                    ],
+                },
+                {
+                    "zone": "crucible",
+                    "beats": [
+                        {
+                            "name": "中点转折",
+                            "description": midpoint,
+                            "threads": ["外在冲突"],
+                        },
+                        {
+                            "name": "一无所有时刻",
+                            "description": all_lost,
+                            "threads": ["内在冲突", "外在冲突"],
+                        },
+                        {
+                            "name": "灵魂暗夜",
+                            "description": dark_night,
+                            "threads": ["内在冲突"],
+                        },
+                        {
+                            "name": "高潮",
+                            "description": climax,
+                            "threads": ["内在冲突", "外在冲突"],
+                        },
+                    ],
+                },
+                {
+                    "zone": "aftermath",
+                    "beats": [
+                        {
+                            "name": "解决/余韵",
+                            "description": resolution,
+                            "threads": ["内在冲突"],
+                        }
+                    ],
+                },
+            ],
+        )
+        return data
+
+    @model_validator(mode="after")
+    def validate_structure(self):
+        """Validate structural constraints."""
+        if not (2 <= len(self.threads) <= 4):
+            raise ValueError(f"threads count must be 2-4, got {len(self.threads)}")
+        zone_names = sorted(z.zone for z in self.zones)
+        if zone_names != ["aftermath", "crucible", "setup"]:
+            raise ValueError(f"zones must be exactly setup/crucible/aftermath, got {zone_names}")
+        return self
 
 
 class NarrativeIssue(BaseModel):

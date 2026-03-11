@@ -91,8 +91,8 @@ def render_sidebar():
         # Conflict design summary
         if context.conflict_design:
             st.subheader("冲突设计")
-            st.write(f"内: {context.conflict_design.inner_conflict[:30]}...")
-            st.write(f"外: {context.conflict_design.outer_conflict[:30]}...")
+            st.write(f"策略: {context.conflict_design.narrative_strategy[:50]}...")
+            st.write(f"线索: {len(context.conflict_design.threads)} 条")
 
         # Outline preview
         if context.outline:
@@ -468,26 +468,44 @@ def _render_world_tab(context):
 def _render_conflict_tab(context):
     """Render conflict design tab."""
     cd = context.conflict_design
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("内在冲突")
-        st.write(cd.inner_conflict)
-    with col2:
-        st.subheader("外在冲突")
-        st.write(cd.outer_conflict)
+    st.subheader("叙事策略")
+    st.write(cd.narrative_strategy)
 
     st.divider()
-    st.subheader("戏剧节拍")
-    beats = [
-        ("激励事件", cd.inciting_incident),
-        ("中点转折", cd.midpoint_reversal),
-        ("一无所有时刻", cd.all_is_lost),
-        ("灵魂暗夜", cd.dark_night_of_soul),
-        ("高潮", cd.climax),
-        ("解决/余韵", cd.resolution),
-    ]
-    for label, content in beats:
-        st.write(f"**{label}**: {content}")
+    st.subheader("冲突线索")
+    for thread in cd.threads:
+        type_labels = {
+            "epistemic": "认知",
+            "ontological": "存在",
+            "moral": "道德",
+            "relational": "关系",
+            "survival": "生存",
+            "cosmic": "宇宙",
+            "societal": "社会",
+        }
+        label = type_labels.get(thread.thread_type, thread.thread_type)
+        with st.expander(f"{thread.name} ({label})"):
+            st.write(thread.description)
+            st.caption(f"风险: {thread.stakes}")
+
+    st.divider()
+    zone_labels = {"setup": "铺垫区", "crucible": "熔炉区", "aftermath": "余波区"}
+    st.subheader("叙事区域")
+    for zone in cd.zones:
+        with st.expander(zone_labels.get(zone.zone, zone.zone)):
+            for beat in zone.beats:
+                thread_tags = ", ".join(beat.threads)
+                st.write(f"**{beat.name}**: {beat.description}")
+                st.caption(f"推进线索: {thread_tags}")
+
+    st.divider()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("张力曲线")
+        st.write(cd.tension_shape)
+    with col2:
+        st.subheader("主题贯穿线")
+        st.write(cd.thematic_throughline)
 
 
 def _render_outline_tab(context):
@@ -538,14 +556,14 @@ def _render_review_tab():
             st.write(f"- {s}")
 
 
-def _write_review_one_chapter(writer, reviewer, context, chapter):
+def _write_review_one_chapter(writer, reviewer, context, chapter, litellm_params):
     """Run write → review → revise loop for a single chapter.
 
     Returns (chapter_text, pending_review_or_None).
     If pending_review is not None, a major issue needs user decision.
     """
-    with crew_progress(f"正在写作第{chapter.number}章..."):
-        chapter_text = writer.write_chapter(context, chapter)
+    chapter_text = st.write_stream(writer.write_chapter_stream(context, chapter, litellm_params))
+    writer.finalize_write_chapter(chapter_text, context, chapter)
 
     max_revisions = 3
     for revision in range(max_revisions):
@@ -565,10 +583,12 @@ def _write_review_one_chapter(writer, reviewer, context, chapter):
         if minor_issues:
             if revision < max_revisions - 1:
                 st.info(f"第{revision + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中...")
-                with crew_progress("自动修订中..."):
-                    chapter_text = writer.revise_chapter(
-                        context, chapter, chapter_text, minor_issues
+                chapter_text = st.write_stream(
+                    writer.revise_chapter_stream(
+                        context, chapter, chapter_text, minor_issues, litellm_params
                     )
+                )
+                writer.finalize_revise_chapter(chapter_text, context, chapter)
             else:
                 st.warning("3轮自动修订仍未通过，升级为需要用户决策")
                 return chapter_text, review
@@ -673,7 +693,9 @@ def render_writing_stage():
                     st.error("请至少选择一个要处理的问题")
                 else:
                     config = load_config()
-                    writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+                    writer_config = get_agent_config(config, "writer")
+                    writer_llm = get_llm_for_agent(writer_config)
+                    litellm_params = get_litellm_stream_params(writer_config)
                     from agents.writer import WriterAgent
 
                     writer = WriterAgent(writer_llm)
@@ -681,10 +703,16 @@ def render_writing_stage():
                     chapter_text = context.chapters[chapter_num - 1]
                     current_chapter = context.outline[chapter_num - 1]
 
-                    with crew_progress("按建议修改中..."):
-                        writer.revise_chapter(
-                            context, current_chapter, chapter_text, selected_issues
+                    revised = st.write_stream(
+                        writer.revise_chapter_stream(
+                            context,
+                            current_chapter,
+                            chapter_text,
+                            selected_issues,
+                            litellm_params,
                         )
+                    )
+                    writer.finalize_revise_chapter(revised, context, current_chapter)
 
                     # Task 6: Increment review cycle and set flag to re-review
                     st.session_state.pending_review = None
@@ -696,7 +724,9 @@ def render_writing_stage():
             if st.button("按我的指导修改"):
                 if user_guidance:
                     config = load_config()
-                    writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+                    writer_config = get_agent_config(config, "writer")
+                    writer_llm = get_llm_for_agent(writer_config)
+                    litellm_params = get_litellm_stream_params(writer_config)
                     from agents.writer import WriterAgent
 
                     writer = WriterAgent(writer_llm)
@@ -711,8 +741,16 @@ def render_writing_stage():
                         }
                     ]
 
-                    with crew_progress("按指导修改中..."):
-                        writer.revise_chapter(context, current_chapter, chapter_text, custom_issues)
+                    revised = st.write_stream(
+                        writer.revise_chapter_stream(
+                            context,
+                            current_chapter,
+                            chapter_text,
+                            custom_issues,
+                            litellm_params,
+                        )
+                    )
+                    writer.finalize_revise_chapter(revised, context, current_chapter)
 
                     # Task 6: Increment review cycle and set flag to re-review
                     st.session_state.pending_review = None
@@ -792,13 +830,23 @@ def render_writing_stage():
                         f"第{review_cycle + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中..."
                     )
                     config = load_config()
-                    writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+                    writer_config = get_agent_config(config, "writer")
+                    writer_llm = get_llm_for_agent(writer_config)
+                    litellm_params = get_litellm_stream_params(writer_config)
                     from agents.writer import WriterAgent
 
                     writer = WriterAgent(writer_llm)
 
-                    with crew_progress("自动修订中..."):
-                        writer.revise_chapter(context, current_chapter, chapter_text, minor_issues)
+                    revised = st.write_stream(
+                        writer.revise_chapter_stream(
+                            context,
+                            current_chapter,
+                            chapter_text,
+                            minor_issues,
+                            litellm_params,
+                        )
+                    )
+                    writer.finalize_revise_chapter(revised, context, current_chapter)
 
                     # Re-review again
                     st.session_state.review_cycle = review_cycle + 1
@@ -827,7 +875,9 @@ def render_writing_stage():
     # Auto-writing: process ONE chapter per Streamlit run, then rerun
     if st.session_state.auto_writing_in_progress and completed < total_chapters:
         config = load_config()
-        writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
+        writer_config = get_agent_config(config, "writer")
+        writer_llm = get_llm_for_agent(writer_config)
+        litellm_params = get_litellm_stream_params(writer_config)
         review_llm = get_llm_for_agent(get_agent_config(config, "reviewer"))
 
         from agents.writer import WriterAgent
@@ -840,7 +890,7 @@ def render_writing_stage():
         st.subheader(f"正在写作: 第{current_chapter.number}章 {current_chapter.title}")
 
         chapter_text, pending = _write_review_one_chapter(
-            writer, reviewer, context, current_chapter
+            writer, reviewer, context, current_chapter, litellm_params
         )
 
         if pending is not None:

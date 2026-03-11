@@ -1,3 +1,5 @@
+import pytest
+from pydantic import ValidationError
 from models.schemas import (
     Character,
     Entity,
@@ -10,6 +12,9 @@ from models.schemas import (
     ResearchQuestion,
     ResearchNote,
     ConflictDesign,
+    ConflictThread,
+    DramaticBeat,
+    StoryZone,
     NarrativeIssue,
 )
 from models.story_context import StoryContext
@@ -110,18 +115,73 @@ def test_research_note_creation():
     assert len(note.sources) == 2
 
 
-def test_conflict_design_creation():
-    cd = ConflictDesign(
-        inner_conflict="渴望真相 vs 恐惧疯狂",
-        outer_conflict="邪教组织阻止调查",
-        inciting_incident="发现失踪教授的笔记",
-        midpoint_reversal="可信赖的盟友其实是邪教成员",
-        all_is_lost="被关入精神病院",
-        dark_night_of_soul="开始怀疑自己是否真的疯了",
-        climax="直面古神仪式现场",
-        resolution="真相被掩埋，主角带着创伤离开",
+def _make_conflict_design(**overrides):
+    """Helper to build a valid ConflictDesign with sensible defaults."""
+    defaults = dict(
+        narrative_strategy="通过日记碎片拼接揭示真相",
+        threads=[
+            ConflictThread(
+                name="求知之祸",
+                thread_type="epistemic",
+                description="渴望真相 vs 恐惧疯狂",
+                stakes="理智崩溃",
+            ),
+            ConflictThread(
+                name="邪教阴谋",
+                thread_type="societal",
+                description="邪教组织阻止调查",
+                stakes="生命威胁",
+            ),
+        ],
+        zones=[
+            StoryZone(
+                zone="setup",
+                beats=[
+                    DramaticBeat(
+                        name="发现笔记",
+                        description="发现失踪教授的笔记",
+                        threads=["求知之祸"],
+                    )
+                ],
+            ),
+            StoryZone(
+                zone="crucible",
+                beats=[
+                    DramaticBeat(
+                        name="盟友背叛",
+                        description="可信赖的盟友其实是邪教成员",
+                        threads=["求知之祸", "邪教阴谋"],
+                    ),
+                    DramaticBeat(
+                        name="直面仪式",
+                        description="直面古神仪式现场",
+                        threads=["求知之祸", "邪教阴谋"],
+                    ),
+                ],
+            ),
+            StoryZone(
+                zone="aftermath",
+                beats=[
+                    DramaticBeat(
+                        name="真相掩埋",
+                        description="真相被掩埋，主角带着创伤离开",
+                        threads=["求知之祸"],
+                    )
+                ],
+            ),
+        ],
+        tension_shape="慢炖型：长时间不安积累后猛然爆发",
+        thematic_throughline="知识即诅咒",
     )
-    assert "渴望" in cd.inner_conflict
+    defaults.update(overrides)
+    return ConflictDesign(**defaults)
+
+
+def test_conflict_design_creation():
+    cd = _make_conflict_design()
+    assert "日记" in cd.narrative_strategy
+    assert len(cd.threads) == 2
+    assert len(cd.zones) == 3
 
 
 def test_narrative_issue_creation():
@@ -255,3 +315,133 @@ def test_chapter_outline_with_key_beats():
 def test_story_context_chapter_endings_default():
     ctx = StoryContext()
     assert ctx.chapter_endings == []
+
+
+# --- ConflictDesign new structure ---
+
+
+def test_conflict_design_backward_compat():
+    """Old 8-field format auto-migrates to new zone/thread structure."""
+    old_data = {
+        "inner_conflict": "渴望真相 vs 恐惧疯狂",
+        "outer_conflict": "邪教组织阻止调查",
+        "inciting_incident": "发现失踪教授的笔记",
+        "midpoint_reversal": "可信赖的盟友其实是邪教成员",
+        "all_is_lost": "被关入精神病院",
+        "dark_night_of_soul": "开始怀疑自己是否真的疯了",
+        "climax": "直面古神仪式现场",
+        "resolution": "真相被掩埋",
+    }
+    cd = ConflictDesign(**old_data)
+    assert len(cd.threads) == 2
+    assert len(cd.zones) == 3
+    zone_names = {z.zone for z in cd.zones}
+    assert zone_names == {"setup", "crucible", "aftermath"}
+    assert cd.threads[0].description == "渴望真相 vs 恐惧疯狂"
+
+
+def test_conflict_thread_types():
+    """thread_type Literal rejects invalid values."""
+    # Valid
+    t = ConflictThread(name="t", thread_type="epistemic", description="d", stakes="s")
+    assert t.thread_type == "epistemic"
+
+    # Invalid
+    with pytest.raises(ValidationError):
+        ConflictThread(name="t", thread_type="invalid_type", description="d", stakes="s")
+
+
+def test_story_zone_structure():
+    """ConflictDesign rejects invalid zone configurations."""
+    base = _make_conflict_design()
+
+    # Missing zone
+    with pytest.raises(ValidationError):
+        ConflictDesign(
+            narrative_strategy="x",
+            threads=base.threads,
+            zones=[
+                StoryZone(zone="setup", beats=[]),
+                StoryZone(zone="crucible", beats=[]),
+            ],
+            tension_shape="x",
+            thematic_throughline="x",
+        )
+
+    # Duplicate zone
+    with pytest.raises(ValidationError):
+        ConflictDesign(
+            narrative_strategy="x",
+            threads=base.threads,
+            zones=[
+                StoryZone(zone="setup", beats=[]),
+                StoryZone(zone="setup", beats=[]),
+                StoryZone(zone="crucible", beats=[]),
+            ],
+            tension_shape="x",
+            thematic_throughline="x",
+        )
+
+
+def test_conflict_design_thread_count():
+    """ConflictDesign requires 2-4 threads."""
+    base = _make_conflict_design()
+    zones = base.zones
+
+    # 1 thread — too few
+    with pytest.raises(ValidationError):
+        ConflictDesign(
+            narrative_strategy="x",
+            threads=[ConflictThread(name="t", thread_type="moral", description="d", stakes="s")],
+            zones=zones,
+            tension_shape="x",
+            thematic_throughline="x",
+        )
+
+    # 5 threads — too many
+    with pytest.raises(ValidationError):
+        ConflictDesign(
+            narrative_strategy="x",
+            threads=[
+                ConflictThread(name=f"t{i}", thread_type="moral", description="d", stakes="s")
+                for i in range(5)
+            ],
+            zones=zones,
+            tension_shape="x",
+            thematic_throughline="x",
+        )
+
+
+def test_story_context_roundtrip_with_new_conflict():
+    """StoryContext with new ConflictDesign survives to_dict/from_dict roundtrip."""
+    ctx = StoryContext()
+    ctx.conflict_design = _make_conflict_design()
+
+    data = ctx.to_dict()
+    restored = StoryContext.from_dict(data)
+
+    assert restored.conflict_design is not None
+    assert len(restored.conflict_design.threads) == 2
+    assert len(restored.conflict_design.zones) == 3
+    assert restored.conflict_design.narrative_strategy == ctx.conflict_design.narrative_strategy
+
+
+def test_story_context_load_legacy_conflict():
+    """StoryContext.from_dict with legacy conflict_design format auto-migrates."""
+    data = {
+        "seed": {},
+        "conflict_design": {
+            "inner_conflict": "渴望vs恐惧",
+            "outer_conflict": "馆长阻止",
+            "inciting_incident": "发现笔记",
+            "midpoint_reversal": "盟友是邪教",
+            "all_is_lost": "精神病院",
+            "dark_night_of_soul": "怀疑自己",
+            "climax": "直面仪式",
+            "resolution": "真相掩埋",
+        },
+    }
+    ctx = StoryContext.from_dict(data)
+    assert ctx.conflict_design is not None
+    assert len(ctx.conflict_design.threads) == 2
+    assert len(ctx.conflict_design.zones) == 3

@@ -28,8 +28,25 @@ class ConflictArchitectAgent:
             # Handle nested structure if wrapped in a key
             if "conflict_design" in data:
                 data = data["conflict_design"]
+            self._normalize_conflict_data(data)
             return ConflictDesign(**data)
         raise ValueError("Could not extract conflict design from response")
+
+    @staticmethod
+    def _normalize_conflict_data(data: dict) -> None:
+        """Normalize LLM output quirks before Pydantic validation."""
+        # Normalize beats.threads: string → [string]
+        for zone in data.get("zones", []):
+            for beat in zone.get("beats", []):
+                if isinstance(beat.get("threads"), str):
+                    beat["threads"] = [beat["threads"]]
+
+        # Ensure all 3 zones exist
+        existing_zones = {z.get("zone") for z in data.get("zones", [])}
+        for required in ("setup", "crucible", "aftermath"):
+            if required not in existing_zones:
+                logger.warning("Missing zone '%s', adding empty placeholder", required)
+                data.setdefault("zones", []).append({"zone": required, "beats": []})
 
     def _run_agent(self, task_description: str) -> str:
         """Run the agent with given task."""
@@ -82,7 +99,7 @@ class ConflictArchitectAgent:
 
         # Step 1: Generate initial conflict design
         generate_desc = f"""
-基于以下信息，设计故事的核心冲突结构。
+基于以下信息，设计故事的多线冲突结构。
 
 故事种子:
 {json.dumps(context.seed, ensure_ascii=False, indent=2)}
@@ -92,17 +109,37 @@ class ConflictArchitectAgent:
 {research_text}
 {feedback_section}
 
-请设计完整的冲突结构，输出JSON格式:
+请设计完整的冲突结构，选择 2-4 种冲突类型编织线索，用三区（setup/crucible/aftermath）组织节拍。
+输出JSON格式:
 ```json
 {{
-  "inner_conflict": "主角内在冲突（渴望 vs 恐惧）",
-  "outer_conflict": "主要外在冲突（对抗力量）",
-  "inciting_incident": "激励事件",
-  "midpoint_reversal": "中点转折",
-  "all_is_lost": "一无所有时刻",
-  "dark_night_of_soul": "灵魂暗夜",
-  "climax": "高潮",
-  "resolution": "解决/余韵"
+  "narrative_strategy": "一句话叙事策略",
+  "threads": [
+    {{
+      "name": "线索名称",
+      "thread_type": "epistemic/ontological/moral/relational/survival/cosmic/societal",
+      "description": "线索描述",
+      "stakes": "风险描述"
+    }}
+  ],
+  "zones": [
+    {{
+      "zone": "setup",
+      "beats": [
+        {{"name": "节拍名称", "description": "具体内容", "threads": ["推进的线索名称"]}}
+      ]
+    }},
+    {{
+      "zone": "crucible",
+      "beats": [...]
+    }},
+    {{
+      "zone": "aftermath",
+      "beats": [...]
+    }}
+  ],
+  "tension_shape": "张力曲线形状描述",
+  "thematic_throughline": "主题贯穿线"
 }}
 ```
 """
@@ -121,11 +158,11 @@ class ConflictArchitectAgent:
 {json.dumps(initial_design.model_dump(), ensure_ascii=False, indent=2)}
 
 评估标准：
-1. 内外冲突是否呼应？（内在恐惧是否与外在威胁直接相关？）
-2. 每个戏剧节拍之间是否有因果链？（前一个事件是否自然导向下一个？）
-3. 主角是否有真正的选择困境？（而非被动遭遇）
-4. 高潮是否同时解决内外冲突？
-5. 结局是否有余韵？（而非简单收束）
+1. 冲突线索是否交织？（不同线索的节拍是否交替出现，而非各自独立？）
+2. 熔炉区是否包含反转？（反转是否有铺垫区的伏笔支撑？）
+3. 主角是否有主动选择？（而非被动遭遇一连串事件？）
+4. 张力曲线是否有变化？（非单调递增？）
+5. 余波区是否体现代价？（而非简单收束？）
 
 请输出JSON格式:
 ```json
@@ -147,17 +184,14 @@ class ConflictArchitectAgent:
 自我评估:
 {eval_result}
 
-请输出优化后的完整冲突设计，JSON格式同上。
+请输出优化后的完整冲突设计，JSON格式同上（narrative_strategy, threads, zones, tension_shape, thematic_throughline）。
 ```json
 {{
-  "inner_conflict": "...",
-  "outer_conflict": "...",
-  "inciting_incident": "...",
-  "midpoint_reversal": "...",
-  "all_is_lost": "...",
-  "dark_night_of_soul": "...",
-  "climax": "...",
-  "resolution": "..."
+  "narrative_strategy": "...",
+  "threads": [...],
+  "zones": [...],
+  "tension_shape": "...",
+  "thematic_throughline": "..."
 }}
 ```
 """

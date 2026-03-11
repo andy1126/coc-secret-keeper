@@ -1,5 +1,9 @@
 import json
 import logging
+from collections.abc import Generator
+from typing import Any
+
+import litellm
 from crewai import Agent, Task, Crew
 
 from models.story_context import StoryContext
@@ -46,12 +50,8 @@ class WriterAgent:
         logger.info("WriterAgent: crew.kickoff() done (%d chars)", len(result))
         return result
 
-    def write_chapter(
-        self,
-        context: StoryContext,
-        chapter: ChapterOutline,
-    ) -> str:
-        """Write a single chapter."""
+    def _build_write_task_desc(self, context: StoryContext, chapter: ChapterOutline) -> str:
+        """Build the task description for writing a chapter."""
         world_dict = context.world.model_dump() if context.world else {}
         outline_dict = chapter.model_dump()
 
@@ -84,7 +84,7 @@ Key Beats Checklist (MUST cover ALL of these in order):
         if context.chapter_endings:
             previous_ending = context.chapter_endings[-1]
 
-        task_desc = f"""
+        return f"""
 Write chapter {chapter.number}: "{chapter.title}"
 
 World Setting:
@@ -114,6 +114,35 @@ Include payoffs: {chapter.payoffs}
 IMPORTANT: You MUST cover every key beat listed above. Do not conclude the chapter
 until all beats have been addressed. Check this list before writing your ending.
 """
+
+    def _build_revise_task_desc(
+        self, chapter: ChapterOutline, chapter_text: str, issues: list[dict]
+    ) -> str:
+        """Build the task description for revising a chapter."""
+        issues_desc = "\n".join(
+            f"- [{i['category']}] {i['description']} → 建议: {i['suggestion']}" for i in issues
+        )
+
+        return f"""
+Revise chapter {chapter.number}: "{chapter.title}"
+
+Original text:
+{chapter_text}
+
+Issues to fix:
+{issues_desc}
+
+Rewrite the chapter fixing all listed issues while maintaining the same story flow.
+Output the complete revised chapter in Chinese.
+"""
+
+    def write_chapter(
+        self,
+        context: StoryContext,
+        chapter: ChapterOutline,
+    ) -> str:
+        """Write a single chapter."""
+        task_desc = self._build_write_task_desc(context, chapter)
 
         result = self._run_agent(task_desc)
         idx = chapter.number - 1
@@ -154,22 +183,7 @@ until all beats have been addressed. Check this list before writing your ending.
         issues: list[dict],
     ) -> str:
         """Revise a chapter based on review feedback."""
-        issues_desc = "\n".join(
-            f"- [{i['category']}] {i['description']} → 建议: {i['suggestion']}" for i in issues
-        )
-
-        task_desc = f"""
-Revise chapter {chapter.number}: "{chapter.title}"
-
-Original text:
-{chapter_text}
-
-Issues to fix:
-{issues_desc}
-
-Rewrite the chapter fixing all listed issues while maintaining the same story flow.
-Output the complete revised chapter in Chinese.
-"""
+        task_desc = self._build_revise_task_desc(chapter, chapter_text, issues)
 
         result = self._run_agent(task_desc)
         # Replace the chapter in context
@@ -181,3 +195,91 @@ Output the complete revised chapter in Chinese.
             ending = result[-500:] if len(result) > 500 else result
             context.chapter_endings[idx] = ending
         return result
+
+    # -- Streaming variants (bypass CrewAI, use litellm directly) --
+
+    def write_chapter_stream(
+        self,
+        context: StoryContext,
+        chapter: ChapterOutline,
+        litellm_params: dict[str, Any],
+    ) -> Generator[str, None, None]:
+        """Stream chapter writing token-by-token via litellm.
+
+        Yields content chunks. Caller must pass the accumulated full response
+        to finalize_write_chapter() after iteration completes.
+        """
+        task_desc = self._build_write_task_desc(context, chapter)
+        messages = [
+            {"role": "system", "content": self.prompt},
+            {"role": "user", "content": task_desc},
+        ]
+
+        logger.info("WriterAgent.write_chapter_stream: calling litellm (ch %d)", chapter.number)
+        response = litellm.completion(messages=messages, **litellm_params)
+        for chunk in response:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield content
+
+    def finalize_write_chapter(
+        self, full_response: str, context: StoryContext, chapter: ChapterOutline
+    ) -> None:
+        """Update context after streaming write completes."""
+        logger.info(
+            "WriterAgent.finalize_write_chapter: ch %d (%d chars)",
+            chapter.number,
+            len(full_response),
+        )
+        idx = chapter.number - 1
+        if idx < len(context.chapters):
+            context.chapters[idx] = full_response
+        else:
+            context.chapters.append(full_response)
+        ending = full_response[-500:] if len(full_response) > 500 else full_response
+        if idx < len(context.chapter_endings):
+            context.chapter_endings[idx] = ending
+        else:
+            context.chapter_endings.append(ending)
+
+    def revise_chapter_stream(
+        self,
+        context: StoryContext,
+        chapter: ChapterOutline,
+        chapter_text: str,
+        issues: list[dict],
+        litellm_params: dict[str, Any],
+    ) -> Generator[str, None, None]:
+        """Stream chapter revision token-by-token via litellm.
+
+        Yields content chunks. Caller must pass the accumulated full response
+        to finalize_revise_chapter() after iteration completes.
+        """
+        task_desc = self._build_revise_task_desc(chapter, chapter_text, issues)
+        messages = [
+            {"role": "system", "content": self.prompt},
+            {"role": "user", "content": task_desc},
+        ]
+
+        logger.info("WriterAgent.revise_chapter_stream: calling litellm (ch %d)", chapter.number)
+        response = litellm.completion(messages=messages, **litellm_params)
+        for chunk in response:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield content
+
+    def finalize_revise_chapter(
+        self, full_response: str, context: StoryContext, chapter: ChapterOutline
+    ) -> None:
+        """Update context after streaming revision completes."""
+        logger.info(
+            "WriterAgent.finalize_revise_chapter: ch %d (%d chars)",
+            chapter.number,
+            len(full_response),
+        )
+        idx = chapter.number - 1
+        if idx < len(context.chapters):
+            context.chapters[idx] = full_response
+        if idx < len(context.chapter_endings):
+            ending = full_response[-500:] if len(full_response) > 500 else full_response
+            context.chapter_endings[idx] = ending

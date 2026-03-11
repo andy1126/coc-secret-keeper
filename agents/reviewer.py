@@ -17,14 +17,10 @@ class ReviewResult:
         self.overall_assessment = data.get("overall_assessment", "")
 
     def get_minor_issues(self) -> list[dict]:
-        return [
-            i for i in self.issues if str(i.get("severity", "")).strip().lower() == "minor"
-        ]
+        return [i for i in self.issues if str(i.get("severity", "")).strip().lower() == "minor"]
 
     def get_major_issues(self) -> list[dict]:
-        return [
-            i for i in self.issues if str(i.get("severity", "")).strip().lower() == "major"
-        ]
+        return [i for i in self.issues if str(i.get("severity", "")).strip().lower() == "major"]
 
 
 class ReviewerAgent:

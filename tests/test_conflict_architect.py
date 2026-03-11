@@ -56,14 +56,25 @@ def test_design_conflicts_with_self_iteration():
     initial_design = """
 ```json
 {
-  "inner_conflict": "渴望真相 vs 恐惧疯狂",
-  "outer_conflict": "馆长阻止调查",
-  "inciting_incident": "发现失踪教授的笔记",
-  "midpoint_reversal": "盟友是邪教成员",
-  "all_is_lost": "被关入精神病院",
-  "dark_night_of_soul": "怀疑自己是否疯了",
-  "climax": "直面古神仪式",
-  "resolution": "真相被掩埋"
+  "narrative_strategy": "通过图书馆调查逐步揭示被操纵的真相",
+  "threads": [
+    {"name": "求知之祸", "thread_type": "epistemic", "description": "渴望真相 vs 恐惧疯狂", "stakes": "理智崩溃"},
+    {"name": "邪教操控", "thread_type": "societal", "description": "馆长阻止调查", "stakes": "生命"}
+  ],
+  "zones": [
+    {"zone": "setup", "beats": [
+      {"name": "发现笔记", "description": "发现失踪教授的笔记", "threads": ["求知之祸"]}
+    ]},
+    {"zone": "crucible", "beats": [
+      {"name": "盟友背叛", "description": "盟友是邪教成员", "threads": ["邪教操控"]},
+      {"name": "直面仪式", "description": "直面古神仪式", "threads": ["求知之祸", "邪教操控"]}
+    ]},
+    {"zone": "aftermath", "beats": [
+      {"name": "真相掩埋", "description": "真相被掩埋", "threads": ["求知之祸"]}
+    ]}
+  ],
+  "tension_shape": "慢炖型",
+  "thematic_throughline": "知识即诅咒"
 }
 ```
 """
@@ -71,8 +82,8 @@ def test_design_conflicts_with_self_iteration():
     self_eval = """
 ```json
 {
-  "evaluation": "内外冲突呼应不够紧密",
-  "improvements": ["让外在冲突直接威胁内在冲突"]
+  "evaluation": "线索交织不够紧密",
+  "improvements": ["让馆长利用求知欲引导完成仪式"]
 }
 ```
 """
@@ -80,14 +91,26 @@ def test_design_conflicts_with_self_iteration():
     refined_design = """
 ```json
 {
-  "inner_conflict": "渴望真相 vs 恐惧疯狂——每一次发现都让他更接近真相也更接近崩溃",
-  "outer_conflict": "馆长利用李教授的求知欲引导他完成仪式",
-  "inciting_incident": "发现失踪教授的笔记，其中提到了自己的名字",
-  "midpoint_reversal": "馆长并非阻止者而是引导者——李教授一直在被利用",
-  "all_is_lost": "意识到自己的研究成果就是仪式的最后一环",
-  "dark_night_of_soul": "选择：销毁研究（背叛一生追求）还是完成仪式（毁灭世界）",
-  "climax": "试图销毁研究时发现知识已经改变了他的本质",
-  "resolution": "知识无法被遗忘，他带着诅咒般的认知继续活着"
+  "narrative_strategy": "通过图书馆调查逐步揭示被操纵的真相",
+  "threads": [
+    {"name": "求知之祸", "thread_type": "epistemic", "description": "每一次发现都更接近崩溃", "stakes": "理智"},
+    {"name": "邪教操控", "thread_type": "societal", "description": "馆长利用李教授的求知欲引导他完成仪式", "stakes": "生命"}
+  ],
+  "zones": [
+    {"zone": "setup", "beats": [
+      {"name": "发现笔记", "description": "发现失踪教授的笔记，其中提到了自己的名字", "threads": ["求知之祸"]}
+    ]},
+    {"zone": "crucible", "beats": [
+      {"name": "引导者揭露", "description": "馆长并非阻止者而是引导者", "threads": ["求知之祸", "邪教操控"]},
+      {"name": "仪式之环", "description": "研究成果就是仪式的最后一环", "threads": ["求知之祸", "邪教操控"]},
+      {"name": "销毁抉择", "description": "销毁研究时发现知识已改变本质", "threads": ["求知之祸"]}
+    ]},
+    {"zone": "aftermath", "beats": [
+      {"name": "诅咒认知", "description": "知识无法被遗忘，带着诅咒般的认知继续活着", "threads": ["求知之祸"]}
+    ]}
+  ],
+  "tension_shape": "慢炖后爆发",
+  "thematic_throughline": "知识即诅咒"
 }
 ```
 """
@@ -96,5 +119,5 @@ def test_design_conflicts_with_self_iteration():
         design = agent.design_conflicts(context)
 
     assert isinstance(design, ConflictDesign)
-    assert "利用" in design.outer_conflict  # refined version
+    assert "利用" in design.threads[1].description  # refined version
     assert context.conflict_design is design

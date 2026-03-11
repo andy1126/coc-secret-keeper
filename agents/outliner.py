@@ -3,7 +3,7 @@ import logging
 from crewai import Agent, Task, Crew
 
 from models.story_context import StoryContext
-from models.schemas import ChapterOutline
+from models.schemas import ChapterOutline, ConflictDesign
 
 logger = logging.getLogger("coc.llm")
 
@@ -18,6 +18,25 @@ class OutlinerAgent:
     def _load_prompt(self) -> str:
         with open("prompts/outliner.md", "r", encoding="utf-8") as f:
             return f.read()
+
+    @staticmethod
+    def _format_conflict_for_prompt(conflict: ConflictDesign) -> str:
+        """Format conflict design as human-readable text for LLM consumption."""
+        lines = [f"叙事策略: {conflict.narrative_strategy}"]
+        lines.append(f"主题贯穿线: {conflict.thematic_throughline}")
+        lines.append(f"张力曲线: {conflict.tension_shape}")
+        lines.append("")
+        lines.append("冲突线索:")
+        for t in conflict.threads:
+            lines.append(f"  - {t.name} ({t.thread_type}): {t.description} [风险: {t.stakes}]")
+        lines.append("")
+        zone_labels = {"setup": "铺垫区", "crucible": "熔炉区", "aftermath": "余波区"}
+        for zone in conflict.zones:
+            lines.append(f"【{zone_labels.get(zone.zone, zone.zone)}】")
+            for beat in zone.beats:
+                thread_tags = ", ".join(beat.threads)
+                lines.append(f"  · {beat.name}: {beat.description} → [{thread_tags}]")
+        return "\n".join(lines)
 
     def _extract_outline(self, text: str) -> list[ChapterOutline]:
         """Extract chapter outline from agent response."""
@@ -84,8 +103,8 @@ class OutlinerAgent:
         conflict_section = ""
         if context.conflict_design:
             conflict_section = f"""
-冲突设计（请以此作为故事骨架安排章节内容），根据内容取章节标题:
-{json.dumps(context.conflict_design.model_dump(), ensure_ascii=False, indent=2)}
+冲突设计（按三区结构安排章节，注意冲突线索交织），根据内容取章节标题:
+{self._format_conflict_for_prompt(context.conflict_design)}
 """
 
         if existing_outline:
