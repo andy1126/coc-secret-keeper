@@ -284,13 +284,15 @@ def test_build_revise_task_desc():
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
 
+    context = StoryContext()
+    context.seed = {"theme": "调查"}
     chapter = ChapterOutline(number=1, title="开端", summary="开始", mood="悬疑", word_target=500)
     issues = [
         {"category": "pacing", "description": "节奏太慢", "suggestion": "加快节奏"},
         {"category": "dialogue", "description": "对话生硬", "suggestion": "更自然"},
     ]
 
-    task_desc = agent._build_revise_task_desc(chapter, "原文内容", issues)
+    task_desc = agent._build_revise_task_desc(context, chapter, "原文内容", issues)
     assert "节奏太慢" in task_desc
     assert "对话生硬" in task_desc
     assert "加快节奏" in task_desc

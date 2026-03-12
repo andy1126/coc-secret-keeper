@@ -84,12 +84,29 @@ Key Beats Checklist (MUST cover ALL of these in order):
         if context.chapter_endings:
             previous_ending = context.chapter_endings[-1]
 
+        writing_style = context.seed.get("writing_style", {})
+        style_block = ""
+        if writing_style:
+            lines = []
+            if writing_style.get("style"):
+                lines.append(f"- 文风: {writing_style['style']}")
+            if writing_style.get("narration"):
+                lines.append(f"- 叙事方式: {writing_style['narration']}")
+            if writing_style.get("writing_style_notes"):
+                lines.append(f"- 补充要求: {writing_style['writing_style_notes']}")
+            if lines:
+                style_block = (
+                    "\nWriting Style Requirements:\n"
+                    + "\n".join(lines)
+                    + "\n\nYou MUST write in this style throughout the chapter.\n"
+                )
+
         return f"""
 Write chapter {chapter.number}: "{chapter.title}"
 
 World Setting:
 {json.dumps(world_dict, ensure_ascii=False, indent=2)}
-
+{style_block}
 Chapter Outline:
 {json.dumps(outline_dict, ensure_ascii=False, indent=2)}
 
@@ -116,12 +133,31 @@ until all beats have been addressed. Check this list before writing your ending.
 """
 
     def _build_revise_task_desc(
-        self, chapter: ChapterOutline, chapter_text: str, issues: list[dict]
+        self,
+        context: StoryContext,
+        chapter: ChapterOutline,
+        chapter_text: str,
+        issues: list[dict],
     ) -> str:
         """Build the task description for revising a chapter."""
         issues_desc = "\n".join(
             f"- [{i['category']}] {i['description']} → 建议: {i['suggestion']}" for i in issues
         )
+
+        writing_style = context.seed.get("writing_style", {})
+        style_reminder = ""
+        if writing_style:
+            parts = []
+            if writing_style.get("style"):
+                parts.append(writing_style["style"])
+            if writing_style.get("narration"):
+                parts.append(writing_style["narration"])
+            if writing_style.get("writing_style_notes"):
+                parts.append(writing_style["writing_style_notes"])
+            if parts:
+                style_reminder = (
+                    f"\nRemember to maintain the writing style: {', '.join(parts)}\n"
+                )
 
         return f"""
 Revise chapter {chapter.number}: "{chapter.title}"
@@ -133,7 +169,7 @@ Issues to fix:
 {issues_desc}
 
 Rewrite the chapter fixing all listed issues while maintaining the same story flow.
-Output the complete revised chapter in Chinese.
+{style_reminder}Output the complete revised chapter in Chinese.
 """
 
     def write_chapter(
@@ -183,7 +219,7 @@ Output the complete revised chapter in Chinese.
         issues: list[dict],
     ) -> str:
         """Revise a chapter based on review feedback."""
-        task_desc = self._build_revise_task_desc(chapter, chapter_text, issues)
+        task_desc = self._build_revise_task_desc(context, chapter, chapter_text, issues)
 
         result = self._run_agent(task_desc)
         # Replace the chapter in context
@@ -255,7 +291,7 @@ Output the complete revised chapter in Chinese.
         Yields content chunks. Caller must pass the accumulated full response
         to finalize_revise_chapter() after iteration completes.
         """
-        task_desc = self._build_revise_task_desc(chapter, chapter_text, issues)
+        task_desc = self._build_revise_task_desc(context, chapter, chapter_text, issues)
         messages = [
             {"role": "system", "content": self.prompt},
             {"role": "user", "content": task_desc},
