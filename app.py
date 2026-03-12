@@ -129,7 +129,11 @@ def render_sidebar():
             mime="application/json",
         )
 
-        uploaded = st.file_uploader("读取存档", type=["json"])
+        is_generating = st.session_state.get("_design_generating", False) or st.session_state.get(
+            "auto_writing_in_progress", False
+        )
+
+        uploaded = st.file_uploader("读取存档", type=["json"], disabled=is_generating)
         if uploaded is not None:
             file_id = f"{uploaded.name}_{uploaded.size}"
             if st.session_state.get("_last_loaded_save") != file_id:
@@ -148,8 +152,20 @@ def render_sidebar():
                         "show_design_feedback",
                         "design_review_result",
                         "final_review_result",
+                        "_design_auto_resume",
+                        "_design_generating",
+                        "_design_pending_feedback",
                     ]:
                         st.session_state.pop(key, None)
+
+                    # Auto-resume partial design on load
+                    if stage == "design":
+                        from agents.design_team import detect_resume_point
+
+                        rp = detect_resume_point(context)
+                        if 0 < rp < 5:
+                            st.session_state._design_auto_resume = True
+
                     st.session_state._last_loaded_save = file_id
                     st.rerun()
                 except (ValueError, Exception) as e:
@@ -274,19 +290,54 @@ def render_design_stage():
     design_complete = context.world and context.conflict_design and context.outline
 
     if not design_complete:
+        from agents.design_team import detect_resume_point
+
+        # Auto-resume generation interrupted by rerun (e.g. sidebar interaction)
+        if st.session_state.get("_design_generating"):
+            _run_design_generation(
+                context, feedback=st.session_state.get("_design_pending_feedback")
+            )
+            return
+
         # Check for pending feedback regeneration
         feedback = st.session_state.pop("design_feedback", None)
         if feedback:
             _run_design_generation(context, feedback=feedback)
             return
 
-        st.write("点击下方按钮，AI 将自动完成以下流程：")
-        st.write(
-            "1. 生成研究问题 → 2. 深度研究 → 3. 构建世界观 + 设计冲突 → 4. 生成大纲 + 叙事审查"
-        )
-
-        if st.button("开始设计"):
+        # Auto-resume from loaded save (one-shot trigger)
+        if st.session_state.pop("_design_auto_resume", False):
             _run_design_generation(context)
+            return
+
+        resume_point = detect_resume_point(context)
+        has_partial = resume_point > 0
+
+        if has_partial:
+            phase_labels = ["生成研究问题", "深度研究", "构建世界观", "设计冲突结构", "生成大纲"]
+            st.info("检测到设计进度，将从断点继续：")
+            for i, label in enumerate(phase_labels):
+                st.write(f"  {'✅' if i < resume_point else '⬜'} {label}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("继续设计"):
+                    _run_design_generation(context)
+            with col2:
+                if st.button("从头开始"):
+                    context.research_questions = []
+                    context.research_notes = []
+                    context.world = None
+                    context.conflict_design = None
+                    context.outline = []
+                    _run_design_generation(context)
+        else:
+            st.write("点击下方按钮，AI 将自动完成以下流程：")
+            st.write(
+                "1. 生成研究问题 → 2. 深度研究 → 3. 构建世界观 + 设计冲突 → 4. 生成大纲 + 叙事审查"
+            )
+
+            if st.button("开始设计"):
+                _run_design_generation(context)
     else:
         # Check for pending feedback
         feedback = st.session_state.pop("design_feedback", None)
@@ -349,73 +400,87 @@ def render_design_stage():
 
 def _run_design_generation(context, feedback=None):
     """Run the full design team pipeline."""
-    config = load_config()
+    st.session_state._design_generating = True
+    st.session_state._design_pending_feedback = feedback
 
-    from agents.worldbuilder import WorldbuilderAgent
-    from agents.researcher import ResearcherAgent
-    from agents.conflict_architect import ConflictArchitectAgent
-    from agents.outliner import OutlinerAgent
-    from agents.narrative_reviewer import NarrativeReviewerAgent
-    from agents.design_team import run_design_team
+    try:
+        config = load_config()
 
-    worldbuilder = WorldbuilderAgent(get_llm_for_agent(get_agent_config(config, "worldbuilder")))
-    researcher = ResearcherAgent(get_llm_for_agent(get_agent_config(config, "researcher")))
-    conflict_architect = ConflictArchitectAgent(
-        get_llm_for_agent(get_agent_config(config, "conflict_architect"))
-    )
-    outliner = OutlinerAgent(get_llm_for_agent(get_agent_config(config, "outliner")))
-    reviewer = NarrativeReviewerAgent(
-        get_llm_for_agent(get_agent_config(config, "narrative_reviewer"))
-    )
+        from agents.worldbuilder import WorldbuilderAgent
+        from agents.researcher import ResearcherAgent
+        from agents.conflict_architect import ConflictArchitectAgent
+        from agents.outliner import OutlinerAgent
+        from agents.narrative_reviewer import NarrativeReviewerAgent
+        from agents.design_team import run_design_team
 
-    # If feedback provided, inject into seed temporarily
-    if feedback:
-        context.seed["_design_feedback"] = feedback
-
-    # Progress display
-    progress_placeholder = st.empty()
-    phase_status = {}
-
-    def on_progress(phase, status):
-        phase_labels = {
-            "research_questions": "生成研究问题",
-            "research": "深度研究",
-            "world_building": "构建世界观",
-            "conflict_design": "设计冲突结构",
-            "outline": "生成大纲",
-            "review": "叙事审查",
-        }
-        phase_status[phase] = status
-        lines = []
-        for p, label in phase_labels.items():
-            if p in phase_status:
-                icon = "✅" if phase_status[p] == "done" else "⏳"
-                lines.append(f"{icon} {label}")
-            else:
-                lines.append(f"⬜ {label}")
-        progress_placeholder.markdown("\n\n".join(lines))
-
-    with crew_progress("AI 设计团队正在协作..."):
-        result = run_design_team(
-            context,
-            worldbuilder,
-            researcher,
-            conflict_architect,
-            outliner,
-            reviewer,
-            on_progress=on_progress,
+        worldbuilder = WorldbuilderAgent(
+            get_llm_for_agent(get_agent_config(config, "worldbuilder"))
+        )
+        researcher = ResearcherAgent(get_llm_for_agent(get_agent_config(config, "researcher")))
+        conflict_architect = ConflictArchitectAgent(
+            get_llm_for_agent(get_agent_config(config, "conflict_architect"))
+        )
+        outliner = OutlinerAgent(get_llm_for_agent(get_agent_config(config, "outliner")))
+        reviewer = NarrativeReviewerAgent(
+            get_llm_for_agent(get_agent_config(config, "narrative_reviewer"))
         )
 
-    # Clean up temp feedback
-    context.seed.pop("_design_feedback", None)
+        # If feedback provided, inject into seed temporarily
+        if feedback:
+            context.seed["_design_feedback"] = feedback
 
-    # Store review result for display
-    st.session_state.design_review_result = {
-        "passed": result.review.passed,
-        "issues": [i.model_dump() for i in result.review.issues],
-        "strengths": result.review.strengths,
-        "iterations": result.iterations,
-    }
+        # Progress display
+        progress_placeholder = st.empty()
+        phase_status = {}
+
+        def on_progress(phase, status):
+            phase_labels = {
+                "research_questions": "生成研究问题",
+                "research": "深度研究",
+                "world_building": "构建世界观",
+                "conflict_design": "设计冲突结构",
+                "outline": "生成大纲",
+                "review": "叙事审查",
+            }
+            phase_status[phase] = status
+            lines = []
+            for p, label in phase_labels.items():
+                if p in phase_status:
+                    if phase_status[p] == "done":
+                        icon = "✅"
+                    elif phase_status[p] == "skipped":
+                        icon = "⏩"
+                    else:
+                        icon = "⏳"
+                    lines.append(f"{icon} {label}")
+                else:
+                    lines.append(f"⬜ {label}")
+            progress_placeholder.markdown("\n\n".join(lines))
+
+        with crew_progress("AI 设计团队正在协作..."):
+            result = run_design_team(
+                context,
+                worldbuilder,
+                researcher,
+                conflict_architect,
+                outliner,
+                reviewer,
+                on_progress=on_progress,
+            )
+
+        # Clean up temp feedback
+        context.seed.pop("_design_feedback", None)
+
+        # Store review result for display
+        st.session_state.design_review_result = {
+            "passed": result.review.passed,
+            "issues": [i.model_dump() for i in result.review.issues],
+            "strengths": result.review.strengths,
+            "iterations": result.iterations,
+        }
+    finally:
+        st.session_state.pop("_design_generating", None)
+        st.session_state.pop("_design_pending_feedback", None)
 
     st.rerun()
 
@@ -491,9 +556,10 @@ def _render_conflict_tab(context):
     st.divider()
     zone_labels = {"setup": "铺垫区", "crucible": "熔炉区", "aftermath": "余波区"}
     st.subheader("叙事区域")
-    for zone in cd.zones:
-        with st.expander(zone_labels.get(zone.zone, zone.zone)):
-            for beat in zone.beats:
+    for zone_key in ("setup", "crucible", "aftermath"):
+        zone_beats = [b for b in cd.beats if b.zone == zone_key]
+        with st.expander(zone_labels.get(zone_key, zone_key)):
+            for beat in zone_beats:
                 thread_tags = ", ".join(beat.threads)
                 st.write(f"**{beat.name}**: {beat.description}")
                 st.caption(f"推进线索: {thread_tags}")
@@ -952,20 +1018,6 @@ def render_review_stage():
     # Run final review if not done yet
     if st.session_state.final_review_result is None:
         config = load_config()
-
-        # Back-fill missing chapter summaries (e.g. from legacy save files)
-        if len(context.chapter_summaries) < len(context.chapters):
-            st.info("正在补充生成缺失的章节摘要...")
-            writer_llm = get_llm_for_agent(get_agent_config(config, "writer"))
-            from agents.writer import WriterAgent
-
-            writer = WriterAgent(writer_llm)
-            for idx in range(len(context.chapter_summaries), len(context.chapters)):
-                chapter = context.outline[idx]
-                chapter_text = context.chapters[idx]
-                with crew_progress(f"正在生成第{chapter.number}章摘要..."):
-                    summary = writer.summarize_chapter(chapter, chapter_text)
-                context.chapter_summaries.append(summary)
 
         st.info("正在进行全文终审...")
 

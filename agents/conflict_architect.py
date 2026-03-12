@@ -19,6 +19,24 @@ class ConflictArchitectAgent:
         with open("prompts/conflict_architect.md", "r", encoding="utf-8") as f:
             return f.read()
 
+    def _find_best_json_block(self, text: str, required_keys: set[str]) -> dict | None:
+        """Scan all JSON blocks in text, return the one with most required keys."""
+        import re
+        from agents.json_utils import _try_parse_json
+
+        best: dict | None = None
+        best_score = 0
+
+        for m in re.finditer(r"```json\s*([\s\S]*?)\s*```", text):
+            parsed = _try_parse_json(m.group(1).strip())
+            if parsed:
+                score = len(required_keys & parsed.keys())
+                if score > best_score:
+                    best = parsed
+                    best_score = score
+
+        return best if best_score > 0 else None
+
     def _extract_conflict(self, text: str) -> ConflictDesign:
         """Extract conflict design from agent response."""
         from agents.json_utils import extract_json_object
@@ -28,6 +46,12 @@ class ConflictArchitectAgent:
             # Handle nested structure if wrapped in a key
             if "conflict_design" in data:
                 data = data["conflict_design"]
+            # If first extraction doesn't contain key fields, rescan for better block
+            required = {"narrative_strategy", "threads"}
+            if not required.issubset(data.keys()):
+                better = self._find_best_json_block(text, required)
+                if better:
+                    data = better
             self._normalize_conflict_data(data)
             return ConflictDesign(**data)
         raise ValueError("Could not extract conflict design from response")
@@ -35,18 +59,49 @@ class ConflictArchitectAgent:
     @staticmethod
     def _normalize_conflict_data(data: dict) -> None:
         """Normalize LLM output quirks before Pydantic validation."""
-        # Normalize beats.threads: string → [string]
-        for zone in data.get("zones", []):
-            for beat in zone.get("beats", []):
-                if isinstance(beat.get("threads"), str):
-                    beat["threads"] = [beat["threads"]]
+        # A. Flatten zones nested format (LLM may output it)
+        if "zones" in data and "beats" not in data:
+            flat_beats = []
+            for zone_obj in data.pop("zones"):
+                zone_name = zone_obj.get("zone", "setup")
+                for beat in zone_obj.get("beats", []):
+                    beat["zone"] = zone_name
+                    flat_beats.append(beat)
+            data["beats"] = flat_beats
 
-        # Ensure all 3 zones exist
-        existing_zones = {z.get("zone") for z in data.get("zones", [])}
+        # B. beat.threads string → list
+        for beat in data.get("beats", []):
+            if isinstance(beat.get("threads"), str):
+                beat["threads"] = [beat["threads"]]
+
+        # C. Ensure all 3 zones have at least one beat
+        existing_zones = {b.get("zone") for b in data.get("beats", [])}
         for required in ("setup", "crucible", "aftermath"):
             if required not in existing_zones:
-                logger.warning("Missing zone '%s', adding empty placeholder", required)
-                data.setdefault("zones", []).append({"zone": required, "beats": []})
+                logger.warning("Missing zone '%s' in beats, adding placeholder", required)
+                data.setdefault("beats", []).append(
+                    {
+                        "zone": required,
+                        "name": f"（{required}待补充）",
+                        "description": "待补充",
+                        "threads": [],
+                    }
+                )
+
+        # D. thread_type Chinese → English aliases
+        type_aliases = {
+            "认知": "epistemic",
+            "存在": "ontological",
+            "道德": "moral",
+            "关系": "relational",
+            "生存": "survival",
+            "宇宙": "cosmic",
+            "社会": "societal",
+        }
+        for thread in data.get("threads", []):
+            t = thread.get("thread_type", "")
+            if t in type_aliases:
+                thread["thread_type"] = type_aliases[t]
 
     def _run_agent(self, task_description: str) -> str:
         """Run the agent with given task."""
@@ -109,37 +164,28 @@ class ConflictArchitectAgent:
 {research_text}
 {feedback_section}
 
-请设计完整的冲突结构，选择 2-4 种冲突类型编织线索，用三区（setup/crucible/aftermath）组织节拍。
+请设计完整的冲突结构，选择 1-6 种冲突类型编织线索，用三区（setup/crucible/aftermath）组织节拍。
+⚠️ 必须包含所有 5 个顶层字段: narrative_strategy, threads, beats, tension_shape, thematic_throughline
 输出JSON格式:
 ```json
 {{
   "narrative_strategy": "一句话叙事策略",
   "threads": [
     {{
-      "name": "线索名称",
-      "thread_type": "epistemic/ontological/moral/relational/survival/cosmic/societal",
-      "description": "线索描述",
-      "stakes": "风险描述"
+      "name": "求知之祸",
+      "thread_type": "epistemic",
+      "description": "渴望真相 vs 恐惧疯狂",
+      "stakes": "理智崩溃"
     }}
   ],
-  "zones": [
-    {{
-      "zone": "setup",
-      "beats": [
-        {{"name": "节拍名称", "description": "具体内容", "threads": ["推进的线索名称"]}}
-      ]
-    }},
-    {{
-      "zone": "crucible",
-      "beats": [...]
-    }},
-    {{
-      "zone": "aftermath",
-      "beats": [...]
-    }}
+  "beats": [
+    {{"zone": "setup", "name": "发现笔记", "description": "发现失踪教授的笔记", "threads": ["求知之祸"]}},
+    {{"zone": "crucible", "name": "盟友背叛", "description": "可信赖的盟友其实是邪教成员", "threads": ["求知之祸"]}},
+    {{"zone": "crucible", "name": "直面仪式", "description": "直面古神仪式现场", "threads": ["求知之祸"]}},
+    {{"zone": "aftermath", "name": "真相掩埋", "description": "真相被掩埋", "threads": ["求知之祸"]}}
   ],
-  "tension_shape": "张力曲线形状描述",
-  "thematic_throughline": "主题贯穿线"
+  "tension_shape": "慢炖型：长时间不安积累后猛然爆发",
+  "thematic_throughline": "知识即诅咒"
 }}
 ```
 """
@@ -184,12 +230,17 @@ class ConflictArchitectAgent:
 自我评估:
 {eval_result}
 
-请输出优化后的完整冲突设计，JSON格式同上（narrative_strategy, threads, zones, tension_shape, thematic_throughline）。
+⚠️ 必须包含所有 5 个顶层字段: narrative_strategy, threads, beats, tension_shape, thematic_throughline
+请输出优化后的完整冲突设计，JSON格式同上。
 ```json
 {{
   "narrative_strategy": "...",
   "threads": [...],
-  "zones": [...],
+  "beats": [
+    {{"zone": "setup", "name": "...", "description": "...", "threads": ["..."]}},
+    {{"zone": "crucible", "name": "...", "description": "...", "threads": ["..."]}},
+    {{"zone": "aftermath", "name": "...", "description": "...", "threads": ["..."]}}
+  ],
   "tension_shape": "...",
   "thematic_throughline": "..."
 }}

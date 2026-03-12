@@ -72,121 +72,29 @@ class ConflictThread(BaseModel):
 
 
 class DramaticBeat(BaseModel):
+    zone: ZONE_TYPE = Field(description="叙事区域: setup/crucible/aftermath")
     name: str = Field(description="节拍名称（故事专属）")
     description: str = Field(description="具体内容")
     threads: list[str] = Field(description="推进哪些冲突线索")
 
 
-class StoryZone(BaseModel):
-    zone: ZONE_TYPE = Field(description="叙事区域")
-    beats: list[DramaticBeat] = Field(description="该区域的节拍")
-
-
 class ConflictDesign(BaseModel):
     narrative_strategy: str = Field(description="叙事策略")
     threads: list[ConflictThread] = Field(description="冲突线索")
-    zones: list[StoryZone] = Field(description="叙事区域")
+    beats: list[DramaticBeat] = Field(description="叙事节拍")
     tension_shape: str = Field(description="张力曲线描述")
     thematic_throughline: str = Field(description="主题贯穿线")
-
-    @model_validator(mode="before")
-    @classmethod
-    def migrate_legacy_format(cls, data):
-        """Auto-migrate old 8-beat format to new zone/thread structure."""
-        if not isinstance(data, dict):
-            return data
-        if "inner_conflict" not in data:
-            return data
-
-        inner = data.pop("inner_conflict", "")
-        outer = data.pop("outer_conflict", "")
-        inciting = data.pop("inciting_incident", "")
-        midpoint = data.pop("midpoint_reversal", "")
-        all_lost = data.pop("all_is_lost", "")
-        dark_night = data.pop("dark_night_of_soul", "")
-        climax = data.pop("climax", "")
-        resolution = data.pop("resolution", "")
-
-        data.setdefault("narrative_strategy", "（从旧格式迁移）")
-        data.setdefault("tension_shape", "（从旧格式迁移）")
-        data.setdefault("thematic_throughline", "（从旧格式迁移）")
-        data.setdefault(
-            "threads",
-            [
-                {
-                    "name": "内在冲突",
-                    "thread_type": "moral",
-                    "description": inner,
-                    "stakes": inner,
-                },
-                {
-                    "name": "外在冲突",
-                    "thread_type": "survival",
-                    "description": outer,
-                    "stakes": outer,
-                },
-            ],
-        )
-        data.setdefault(
-            "zones",
-            [
-                {
-                    "zone": "setup",
-                    "beats": [
-                        {
-                            "name": "激励事件",
-                            "description": inciting,
-                            "threads": ["内在冲突", "外在冲突"],
-                        }
-                    ],
-                },
-                {
-                    "zone": "crucible",
-                    "beats": [
-                        {
-                            "name": "中点转折",
-                            "description": midpoint,
-                            "threads": ["外在冲突"],
-                        },
-                        {
-                            "name": "一无所有时刻",
-                            "description": all_lost,
-                            "threads": ["内在冲突", "外在冲突"],
-                        },
-                        {
-                            "name": "灵魂暗夜",
-                            "description": dark_night,
-                            "threads": ["内在冲突"],
-                        },
-                        {
-                            "name": "高潮",
-                            "description": climax,
-                            "threads": ["内在冲突", "外在冲突"],
-                        },
-                    ],
-                },
-                {
-                    "zone": "aftermath",
-                    "beats": [
-                        {
-                            "name": "解决/余韵",
-                            "description": resolution,
-                            "threads": ["内在冲突"],
-                        }
-                    ],
-                },
-            ],
-        )
-        return data
 
     @model_validator(mode="after")
     def validate_structure(self):
         """Validate structural constraints."""
-        if not (2 <= len(self.threads) <= 4):
-            raise ValueError(f"threads count must be 2-4, got {len(self.threads)}")
-        zone_names = sorted(z.zone for z in self.zones)
-        if zone_names != ["aftermath", "crucible", "setup"]:
-            raise ValueError(f"zones must be exactly setup/crucible/aftermath, got {zone_names}")
+        if not (1 <= len(self.threads) <= 6):
+            raise ValueError(f"threads count must be 1-6, got {len(self.threads)}")
+        zones_present = {b.zone for b in self.beats}
+        required = {"setup", "crucible", "aftermath"}
+        missing = required - zones_present
+        if missing:
+            raise ValueError(f"beats missing zones: {missing}")
         return self
 
 
@@ -211,24 +119,6 @@ class WorldSetting(BaseModel):
     secrets: list[Secret] = Field(default_factory=list, description="世界中的隐藏秘密")
     tensions: list[Tension] = Field(default_factory=list, description="势力/角色间的暗流")
     timeline: list[TimelineEvent] = Field(default_factory=list, description="前史事件")
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_locations(cls, data):
-        """Convert string locations to Location objects for backward compatibility."""
-        if isinstance(data, dict) and "locations" in data:
-            locations = data["locations"]
-            if isinstance(locations, list):
-                normalized = []
-                for loc in locations:
-                    if isinstance(loc, str):
-                        normalized.append({"name": loc, "description": ""})
-                    elif isinstance(loc, dict):
-                        normalized.append(loc)
-                    elif isinstance(loc, Location):
-                        normalized.append(loc)
-                data["locations"] = normalized
-        return data
 
 
 class ChapterOutline(BaseModel):

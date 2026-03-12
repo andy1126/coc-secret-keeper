@@ -1,5 +1,5 @@
 from unittest.mock import Mock
-from agents.design_team import DesignResult, run_design_team, format_issues
+from agents.design_team import DesignResult, run_design_team, format_issues, detect_resume_point
 from agents.narrative_reviewer import NarrativeReviewResult
 from models.story_context import StoryContext
 from models.schemas import (
@@ -11,7 +11,6 @@ from models.schemas import (
     ConflictDesign,
     ConflictThread,
     DramaticBeat,
-    StoryZone,
     ResearchQuestion,
     ResearchNote,
     NarrativeIssue,
@@ -53,25 +52,24 @@ def _make_conflict():
                 name="邪教操控", thread_type="societal", description="馆长阻止", stakes="生命"
             ),
         ],
-        zones=[
-            StoryZone(
-                zone="setup",
-                beats=[DramaticBeat(name="发现笔记", description="发现笔记", threads=["求知之祸"])],
+        beats=[
+            DramaticBeat(
+                zone="setup", name="发现笔记", description="发现笔记", threads=["求知之祸"]
             ),
-            StoryZone(
+            DramaticBeat(
                 zone="crucible",
-                beats=[
-                    DramaticBeat(
-                        name="盟友背叛", description="盟友是邪教", threads=["求知之祸", "邪教操控"]
-                    ),
-                    DramaticBeat(
-                        name="直面仪式", description="直面仪式", threads=["求知之祸", "邪教操控"]
-                    ),
-                ],
+                name="盟友背叛",
+                description="盟友是邪教",
+                threads=["求知之祸", "邪教操控"],
             ),
-            StoryZone(
-                zone="aftermath",
-                beats=[DramaticBeat(name="真相掩埋", description="真相掩埋", threads=["求知之祸"])],
+            DramaticBeat(
+                zone="crucible",
+                name="直面仪式",
+                description="直面仪式",
+                threads=["求知之祸", "邪教操控"],
+            ),
+            DramaticBeat(
+                zone="aftermath", name="真相掩埋", description="真相掩埋", threads=["求知之祸"]
             ),
         ],
         tension_shape="慢炖型",
@@ -261,3 +259,96 @@ def test_format_issues():
     result = format_issues(issues)
     assert "tension_sufficiency" in result
     assert "空章节" in result
+
+
+# --- detect_resume_point tests ---
+
+
+def test_detect_resume_point_empty():
+    """Empty context returns 0 (start from beginning)."""
+    ctx = _make_context()
+    assert detect_resume_point(ctx) == 0
+
+
+def test_detect_resume_point_partial():
+    """Partial completion returns correct resume index."""
+    ctx = _make_context()
+
+    # Phase 0 done → resume at 1
+    ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
+    assert detect_resume_point(ctx) == 1
+
+    # Phase 0+1 done → resume at 2
+    ctx.research_notes = [ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])]
+    assert detect_resume_point(ctx) == 2
+
+    # Phase 0+1+2 done → resume at 3
+    ctx.world = _make_world()
+    assert detect_resume_point(ctx) == 3
+
+    # Phase 0+1+2+3 done → resume at 4
+    ctx.conflict_design = _make_conflict()
+    assert detect_resume_point(ctx) == 4
+
+
+def test_detect_resume_point_all_done():
+    """All phases complete returns 5."""
+    ctx = _make_context()
+    ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
+    ctx.research_notes = [ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])]
+    ctx.world = _make_world()
+    ctx.conflict_design = _make_conflict()
+    ctx.outline = _make_outline()
+    assert detect_resume_point(ctx) == 5
+
+
+def test_detect_resume_point_inconsistent():
+    """Inconsistent state (world exists but research missing) → waterfall resets to 0."""
+    ctx = _make_context()
+    ctx.world = _make_world()  # skip research phases
+    assert detect_resume_point(ctx) == 0
+
+
+def test_run_design_team_skips_completed():
+    """When context has phases 0-2 done, those agents are not called."""
+    ctx = _make_context()
+    ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
+    ctx.research_notes = [ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])]
+    ctx.world = _make_world()
+
+    wb, res, ca, out, rev = _make_mock_agents()
+    result = run_design_team(ctx, wb, res, ca, out, rev)
+
+    # Skipped phases: agents not called
+    wb.generate_questions.assert_not_called()
+    res.research.assert_not_called()
+    wb.build_world.assert_not_called()
+
+    # Resumed phases: agents called
+    ca.design_conflicts.assert_called_once()
+    out.create_outline.assert_called_once()
+    rev.review_narrative.assert_called_once()
+    assert result.review.passed is True
+
+
+def test_run_design_team_progress_reports_skipped():
+    """Completed phases report 'skipped' via progress callback."""
+    ctx = _make_context()
+    ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
+    ctx.research_notes = [ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])]
+
+    wb, res, ca, out, rev = _make_mock_agents()
+    progress_calls = []
+
+    def on_progress(phase, status):
+        progress_calls.append((phase, status))
+
+    run_design_team(ctx, wb, res, ca, out, rev, on_progress=on_progress)
+
+    # Phases 0 and 1 should be skipped
+    assert ("research_questions", "skipped") in progress_calls
+    assert ("research", "skipped") in progress_calls
+
+    # Phase 2+ should run normally
+    assert ("world_building", "running") in progress_calls
+    assert ("world_building", "done") in progress_calls

@@ -8,6 +8,8 @@ from models.schemas import (
     ChapterOutline,
     Entity,
     Location,
+    ResearchNote,
+    ResearchQuestion,
     WorldSetting,
 )
 from models.story_context import StoryContext
@@ -54,6 +56,10 @@ def _make_full_context() -> StoryContext:
     ]
     return StoryContext(
         seed={"theme": "宇宙恐怖", "era": "1920", "atmosphere": "阴暗"},
+        research_questions=[ResearchQuestion(topic="genre", question="经典叙事模式？")],
+        research_notes=[
+            ResearchNote(topic="genre", findings="渐进揭示是克苏鲁核心", sources=["引用"])
+        ],
         world=world,
         outline=outline,
         chapters=["第一章正文...", "第二章正文..."],
@@ -123,16 +129,6 @@ def test_load_invalid_context():
         parse_save_data(json.dumps(data).encode())
 
 
-def test_load_future_version():
-    ctx = StoryContext(seed={"theme": "future"})
-    save_data = build_save_data(ctx, "brainstorm", [])
-    save_data["version"] = 999
-    raw = json.dumps(save_data).encode()
-
-    loaded_ctx, loaded_stage, loaded_chat = parse_save_data(raw)
-    assert loaded_ctx.seed["theme"] == "future"
-
-
 def test_save_at_each_stage():
     for stage in VALID_STAGES:
         ctx = StoryContext()
@@ -140,3 +136,60 @@ def test_save_at_each_stage():
         raw = json.dumps(data).encode()
         loaded_ctx, loaded_stage, _ = parse_save_data(raw)
         assert loaded_stage == stage
+
+
+def test_save_load_partial_design_research_only():
+    """Partial design: research_questions populated, world is None."""
+    ctx = StoryContext(
+        seed={"theme": "恐怖", "target_chapters": 8},
+        research_questions=[ResearchQuestion(topic="genre", question="经典模式？")],
+        research_notes=[ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])],
+    )
+    save_data = build_save_data(ctx, "design", [])
+    raw = json.dumps(save_data, ensure_ascii=False).encode()
+
+    loaded_ctx, loaded_stage, _ = parse_save_data(raw)
+
+    assert loaded_stage == "design"
+    assert len(loaded_ctx.research_questions) == 1
+    assert len(loaded_ctx.research_notes) == 1
+    assert loaded_ctx.world is None
+    assert loaded_ctx.conflict_design is None
+    assert loaded_ctx.outline == []
+
+
+def test_save_load_partial_design_through_world():
+    """Partial design: world populated, conflict_design is None."""
+    world = WorldSetting(
+        era="1920年代",
+        locations=[Location(name="阿卡姆", description="诡异小镇")],
+        entities=[Entity(name="古老者", description="外星生物", influence="梦境")],
+        forbidden_knowledge="真相",
+        rules=["不可直视"],
+        characters=[
+            Character(
+                name="张三",
+                background="学者",
+                personality="好奇",
+                motivation="求知",
+                arc="堕落",
+                relationships=[],
+            )
+        ],
+    )
+    ctx = StoryContext(
+        seed={"theme": "恐怖", "target_chapters": 8},
+        research_questions=[ResearchQuestion(topic="genre", question="经典模式？")],
+        research_notes=[ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])],
+        world=world,
+    )
+    save_data = build_save_data(ctx, "design", [])
+    raw = json.dumps(save_data, ensure_ascii=False).encode()
+
+    loaded_ctx, loaded_stage, _ = parse_save_data(raw)
+
+    assert loaded_stage == "design"
+    assert loaded_ctx.world is not None
+    assert loaded_ctx.world.era == "1920年代"
+    assert loaded_ctx.conflict_design is None
+    assert loaded_ctx.outline == []

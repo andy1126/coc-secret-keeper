@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
 from models.story_context import StoryContext
-from models.schemas import Character, Entity, WorldSetting, ChapterOutline
+from models.schemas import Character, Entity, Location, WorldSetting, ChapterOutline
 
 
 def test_full_pipeline():
@@ -20,7 +20,7 @@ def test_full_pipeline():
     # Step 2: World building
     context.world = WorldSetting(
         era="1924年，阿卡姆镇",
-        locations=["密斯卡托尼克大学"],
+        locations=[Location(name="密斯卡托尼克大学", description="藏有禁书的学府")],
         entities=[Entity(name="古老者", description="外星生物", influence="梦境")],
         forbidden_knowledge="人类渺小",
         rules=["不可直视古神"],
@@ -105,7 +105,7 @@ def test_revision_loop_minor_issues():
     context.seed = {"theme": "调查"}
     context.world = WorldSetting(
         era="1920s",
-        locations=["阿卡姆"],
+        locations=[Location(name="阿卡姆", description="诡异小镇")],
         characters=[
             Character(
                 name="张三",
@@ -155,7 +155,7 @@ def test_final_review():
     context.seed = {"theme": "调查"}
     context.world = WorldSetting(
         era="1920s",
-        locations=["阿卡姆"],
+        locations=[Location(name="阿卡姆", description="诡异小镇")],
         characters=[
             Character(
                 name="张三",

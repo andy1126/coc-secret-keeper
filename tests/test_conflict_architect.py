@@ -61,17 +61,11 @@ def test_design_conflicts_with_self_iteration():
     {"name": "求知之祸", "thread_type": "epistemic", "description": "渴望真相 vs 恐惧疯狂", "stakes": "理智崩溃"},
     {"name": "邪教操控", "thread_type": "societal", "description": "馆长阻止调查", "stakes": "生命"}
   ],
-  "zones": [
-    {"zone": "setup", "beats": [
-      {"name": "发现笔记", "description": "发现失踪教授的笔记", "threads": ["求知之祸"]}
-    ]},
-    {"zone": "crucible", "beats": [
-      {"name": "盟友背叛", "description": "盟友是邪教成员", "threads": ["邪教操控"]},
-      {"name": "直面仪式", "description": "直面古神仪式", "threads": ["求知之祸", "邪教操控"]}
-    ]},
-    {"zone": "aftermath", "beats": [
-      {"name": "真相掩埋", "description": "真相被掩埋", "threads": ["求知之祸"]}
-    ]}
+  "beats": [
+    {"zone": "setup", "name": "发现笔记", "description": "发现失踪教授的笔记", "threads": ["求知之祸"]},
+    {"zone": "crucible", "name": "盟友背叛", "description": "盟友是邪教成员", "threads": ["邪教操控"]},
+    {"zone": "crucible", "name": "直面仪式", "description": "直面古神仪式", "threads": ["求知之祸", "邪教操控"]},
+    {"zone": "aftermath", "name": "真相掩埋", "description": "真相被掩埋", "threads": ["求知之祸"]}
   ],
   "tension_shape": "慢炖型",
   "thematic_throughline": "知识即诅咒"
@@ -96,18 +90,12 @@ def test_design_conflicts_with_self_iteration():
     {"name": "求知之祸", "thread_type": "epistemic", "description": "每一次发现都更接近崩溃", "stakes": "理智"},
     {"name": "邪教操控", "thread_type": "societal", "description": "馆长利用李教授的求知欲引导他完成仪式", "stakes": "生命"}
   ],
-  "zones": [
-    {"zone": "setup", "beats": [
-      {"name": "发现笔记", "description": "发现失踪教授的笔记，其中提到了自己的名字", "threads": ["求知之祸"]}
-    ]},
-    {"zone": "crucible", "beats": [
-      {"name": "引导者揭露", "description": "馆长并非阻止者而是引导者", "threads": ["求知之祸", "邪教操控"]},
-      {"name": "仪式之环", "description": "研究成果就是仪式的最后一环", "threads": ["求知之祸", "邪教操控"]},
-      {"name": "销毁抉择", "description": "销毁研究时发现知识已改变本质", "threads": ["求知之祸"]}
-    ]},
-    {"zone": "aftermath", "beats": [
-      {"name": "诅咒认知", "description": "知识无法被遗忘，带着诅咒般的认知继续活着", "threads": ["求知之祸"]}
-    ]}
+  "beats": [
+    {"zone": "setup", "name": "发现笔记", "description": "发现失踪教授的笔记，其中提到了自己的名字", "threads": ["求知之祸"]},
+    {"zone": "crucible", "name": "引导者揭露", "description": "馆长并非阻止者而是引导者", "threads": ["求知之祸", "邪教操控"]},
+    {"zone": "crucible", "name": "仪式之环", "description": "研究成果就是仪式的最后一环", "threads": ["求知之祸", "邪教操控"]},
+    {"zone": "crucible", "name": "销毁抉择", "description": "销毁研究时发现知识已改变本质", "threads": ["求知之祸"]},
+    {"zone": "aftermath", "name": "诅咒认知", "description": "知识无法被遗忘，带着诅咒般的认知继续活着", "threads": ["求知之祸"]}
   ],
   "tension_shape": "慢炖后爆发",
   "thematic_throughline": "知识即诅咒"
@@ -121,3 +109,78 @@ def test_design_conflicts_with_self_iteration():
     assert isinstance(design, ConflictDesign)
     assert "利用" in design.threads[1].description  # refined version
     assert context.conflict_design is design
+
+
+def test_normalize_thread_type_aliases():
+    """Chinese thread_type values are mapped to English."""
+    data = {
+        "narrative_strategy": "x",
+        "threads": [
+            {"name": "t1", "thread_type": "认知", "description": "d", "stakes": "s"},
+            {"name": "t2", "thread_type": "道德", "description": "d", "stakes": "s"},
+        ],
+        "beats": [
+            {"zone": "setup", "name": "a", "description": "a", "threads": ["t1"]},
+            {"zone": "crucible", "name": "b", "description": "b", "threads": ["t1"]},
+            {"zone": "aftermath", "name": "c", "description": "c", "threads": ["t1"]},
+        ],
+        "tension_shape": "x",
+        "thematic_throughline": "x",
+    }
+    ConflictArchitectAgent._normalize_conflict_data(data)
+    assert data["threads"][0]["thread_type"] == "epistemic"
+    assert data["threads"][1]["thread_type"] == "moral"
+
+
+def test_normalize_zones_to_flat_beats():
+    """Old zones format in normalize_conflict_data gets flattened."""
+    data = {
+        "zones": [
+            {"zone": "setup", "beats": [{"name": "a", "description": "a", "threads": ["t"]}]},
+            {
+                "zone": "crucible",
+                "beats": [{"name": "b", "description": "b", "threads": ["t"]}],
+            },
+            {
+                "zone": "aftermath",
+                "beats": [{"name": "c", "description": "c", "threads": ["t"]}],
+            },
+        ],
+        "threads": [],
+    }
+    ConflictArchitectAgent._normalize_conflict_data(data)
+    assert "zones" not in data
+    assert len(data["beats"]) == 3
+    assert data["beats"][0]["zone"] == "setup"
+    assert data["beats"][2]["zone"] == "aftermath"
+
+
+def test_extract_conflict_finds_best_block():
+    """When first JSON block doesn't have required keys, rescan finds better one."""
+    agent = ConflictArchitectAgent(llm=Mock())
+
+    text = """Here's the evaluation:
+```json
+{"evaluation": "ok", "improvements": []}
+```
+
+And here's the conflict design:
+```json
+{
+  "narrative_strategy": "test",
+  "threads": [
+    {"name": "t", "thread_type": "moral", "description": "d", "stakes": "s"}
+  ],
+  "beats": [
+    {"zone": "setup", "name": "a", "description": "a", "threads": ["t"]},
+    {"zone": "crucible", "name": "b", "description": "b", "threads": ["t"]},
+    {"zone": "aftermath", "name": "c", "description": "c", "threads": ["t"]}
+  ],
+  "tension_shape": "x",
+  "thematic_throughline": "x"
+}
+```
+"""
+    design = agent._extract_conflict(text)
+    assert isinstance(design, ConflictDesign)
+    assert design.narrative_strategy == "test"

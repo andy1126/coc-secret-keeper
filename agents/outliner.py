@@ -31,11 +31,12 @@ class OutlinerAgent:
             lines.append(f"  - {t.name} ({t.thread_type}): {t.description} [风险: {t.stakes}]")
         lines.append("")
         zone_labels = {"setup": "铺垫区", "crucible": "熔炉区", "aftermath": "余波区"}
-        for zone in conflict.zones:
-            lines.append(f"【{zone_labels.get(zone.zone, zone.zone)}】")
-            for beat in zone.beats:
-                thread_tags = ", ".join(beat.threads)
-                lines.append(f"  · {beat.name}: {beat.description} → [{thread_tags}]")
+        for zone_key in ("setup", "crucible", "aftermath"):
+            lines.append(f"【{zone_labels[zone_key]}】")
+            for beat in conflict.beats:
+                if beat.zone == zone_key:
+                    thread_tags = ", ".join(beat.threads)
+                    lines.append(f"  · {beat.name}: {beat.description} → [{thread_tags}]")
         return "\n".join(lines)
 
     def _extract_outline(self, text: str) -> list[ChapterOutline]:

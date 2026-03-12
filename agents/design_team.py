@@ -15,6 +15,25 @@ from models.story_context import StoryContext
 logger = logging.getLogger("coc.design_team")
 
 
+def detect_resume_point(context: StoryContext) -> int:
+    """Return the index of the first incomplete design phase (0-4), or 5 if all done.
+
+    Waterfall check: if an earlier phase is missing, all later phases are re-run
+    even if they appear populated (prevents inconsistent state).
+    """
+    if not context.research_questions:
+        return 0
+    if not context.research_notes:
+        return 1
+    if context.world is None:
+        return 2
+    if context.conflict_design is None:
+        return 3
+    if not context.outline:
+        return 4
+    return 5
+
+
 @dataclass
 class DesignResult:
     context: StoryContext
@@ -59,40 +78,57 @@ def run_design_team(
         on_progress: Optional callback(phase_name, status) for UI progress
     """
     target_chapters = context.seed.get("target_chapters", 10)
-    phases = []
+    phases: list[str] = []
+    resume_from = detect_resume_point(context)
 
     def progress(phase: str, status: str) -> None:
         if on_progress:
             on_progress(phase, status)
 
-    # Phase 1: Planning & Questioning
-    progress("research_questions", "running")
-    worldbuilder.generate_questions(context)
+    # Phase 0: Planning & Questioning
+    if resume_from <= 0:
+        progress("research_questions", "running")
+        worldbuilder.generate_questions(context)
+        progress("research_questions", "done")
+    else:
+        progress("research_questions", "skipped")
     phases.append("research_questions")
-    progress("research_questions", "done")
 
-    # Phase 2: Multi-Source Research
-    progress("research", "running")
-    researcher.research(context)
+    # Phase 1: Multi-Source Research
+    if resume_from <= 1:
+        progress("research", "running")
+        researcher.research(context)
+        progress("research", "done")
+    else:
+        progress("research", "skipped")
     phases.append("research")
-    progress("research", "done")
 
-    # Phase 3: World Building + Conflict Design
-    progress("world_building", "running")
-    worldbuilder.build_world(context)
+    # Phase 2: World Building
+    if resume_from <= 2:
+        progress("world_building", "running")
+        worldbuilder.build_world(context)
+        progress("world_building", "done")
+    else:
+        progress("world_building", "skipped")
     phases.append("world_building")
-    progress("world_building", "done")
 
-    progress("conflict_design", "running")
-    conflict_architect.design_conflicts(context)
+    # Phase 3: Conflict Design
+    if resume_from <= 3:
+        progress("conflict_design", "running")
+        conflict_architect.design_conflicts(context)
+        progress("conflict_design", "done")
+    else:
+        progress("conflict_design", "skipped")
     phases.append("conflict_design")
-    progress("conflict_design", "done")
 
     # Phase 4: Outline + Review Loop
-    progress("outline", "running")
-    outliner.create_outline(context, target_chapters)
+    if resume_from <= 4:
+        progress("outline", "running")
+        outliner.create_outline(context, target_chapters)
+        progress("outline", "done")
+    else:
+        progress("outline", "skipped")
     phases.append("outline")
-    progress("outline", "done")
 
     review = None
     iteration = 0

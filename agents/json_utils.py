@@ -15,7 +15,7 @@ def run_with_retry(
     run_fn: Callable[[], str],
     extract_fn: Callable[[str], T],
     *,
-    max_retries: int = 2,
+    max_retries: int = 5,
     label: str = "agent",
 ) -> T:
     """Run an LLM call and extract structured data, retrying on parse failure.

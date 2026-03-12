@@ -84,6 +84,8 @@
 
 ## 输出格式
 
+⚠️ 必须包含所有 5 个顶层字段: narrative_strategy, threads, beats, tension_shape, thematic_throughline
+
 ```json
 {
   "narrative_strategy": "一句话叙事策略",
@@ -95,25 +97,12 @@
       "stakes": "风险描述"
     }
   ],
-  "zones": [
-    {
-      "zone": "setup",
-      "beats": [
-        {
-          "name": "节拍名称（故事专属，不要用通用名）",
-          "description": "具体内容",
-          "threads": ["推进的线索名称"]
-        }
-      ]
-    },
-    {
-      "zone": "crucible",
-      "beats": [...]
-    },
-    {
-      "zone": "aftermath",
-      "beats": [...]
-    }
+  "beats": [
+    {"zone": "setup", "name": "节拍名称（故事专属）", "description": "具体内容", "threads": ["推进的线索名称"]},
+    {"zone": "setup", "name": "另一个铺垫节拍", "description": "具体内容", "threads": ["线索名称"]},
+    {"zone": "crucible", "name": "转折节拍", "description": "具体内容", "threads": ["线索名称"]},
+    {"zone": "crucible", "name": "高潮节拍", "description": "具体内容", "threads": ["线索名称"]},
+    {"zone": "aftermath", "name": "余韵节拍", "description": "具体内容", "threads": ["线索名称"]}
   ],
   "tension_shape": "张力曲线形状描述",
   "thematic_throughline": "主题贯穿线"

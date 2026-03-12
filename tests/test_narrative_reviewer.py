@@ -13,7 +13,6 @@ from models.schemas import (
     ConflictDesign,
     ConflictThread,
     DramaticBeat,
-    StoryZone,
 )
 
 
@@ -49,25 +48,24 @@ def _make_full_context():
                 name="邪教操控", thread_type="societal", description="馆长阻止", stakes="生命"
             ),
         ],
-        zones=[
-            StoryZone(
-                zone="setup",
-                beats=[DramaticBeat(name="发现笔记", description="发现笔记", threads=["求知之祸"])],
+        beats=[
+            DramaticBeat(
+                zone="setup", name="发现笔记", description="发现笔记", threads=["求知之祸"]
             ),
-            StoryZone(
+            DramaticBeat(
                 zone="crucible",
-                beats=[
-                    DramaticBeat(
-                        name="盟友背叛", description="盟友是邪教", threads=["求知之祸", "邪教操控"]
-                    ),
-                    DramaticBeat(
-                        name="直面仪式", description="直面仪式", threads=["求知之祸", "邪教操控"]
-                    ),
-                ],
+                name="盟友背叛",
+                description="盟友是邪教",
+                threads=["求知之祸", "邪教操控"],
             ),
-            StoryZone(
-                zone="aftermath",
-                beats=[DramaticBeat(name="真相掩埋", description="真相掩埋", threads=["求知之祸"])],
+            DramaticBeat(
+                zone="crucible",
+                name="直面仪式",
+                description="直面仪式",
+                threads=["求知之祸", "邪教操控"],
+            ),
+            DramaticBeat(
+                zone="aftermath", name="真相掩埋", description="真相掩埋", threads=["求知之祸"]
             ),
         ],
         tension_shape="慢炖型",
