@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import json
 import logging
-from crewai import Agent, Task, Crew
+
+from crewai import Agent, Task, Crew, LLM
 
 from models.story_context import StoryContext
 from models.schemas import ChapterOutline, ConflictDesign
@@ -11,7 +14,7 @@ logger = logging.getLogger("coc.llm")
 class OutlinerAgent:
     """Agent for creating story outlines."""
 
-    def __init__(self, llm):
+    def __init__(self, llm: LLM) -> None:
         self.llm = llm
         self.prompt = self._load_prompt()
 

@@ -130,7 +130,7 @@ def run_design_team(
         progress("outline", "skipped")
     phases.append("outline")
 
-    review = None
+    review: NarrativeReviewResult | None = None
     iteration = 0
     for iteration in range(max_rounds + 1):
         progress("review", "running")
@@ -184,7 +184,7 @@ def run_design_team(
 
     return DesignResult(
         context=context,
-        review=review,
+        review=review,  # type: ignore[arg-type]
         iterations=iteration,
         phases_completed=phases,
     )

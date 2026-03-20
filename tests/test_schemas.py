@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 from models.schemas import (
@@ -19,7 +21,7 @@ from models.schemas import (
 from models.story_context import StoryContext
 
 
-def test_character_creation():
+def test_character_creation() -> None:
     char = Character(
         name="张三",
         background="考古学家",
@@ -32,7 +34,7 @@ def test_character_creation():
     assert len(char.relationships) == 2
 
 
-def test_entity_creation():
+def test_entity_creation() -> None:
     entity = Entity(
         name="古老者",
         description="来自星际的古老生物",
@@ -41,7 +43,7 @@ def test_entity_creation():
     assert entity.name == "古老者"
 
 
-def test_world_setting_creation():
+def test_world_setting_creation() -> None:
     world = WorldSetting(
         era="1920年代",
         locations=[
@@ -67,7 +69,7 @@ def test_world_setting_creation():
     assert len(world.characters) == 1
 
 
-def test_chapter_outline_creation():
+def test_chapter_outline_creation() -> None:
     chapter = ChapterOutline(
         number=1,
         title="开端",
@@ -84,28 +86,28 @@ def test_chapter_outline_creation():
 # --- Task 1: New schema models ---
 
 
-def test_secret_creation():
+def test_secret_creation() -> None:
     secret = Secret(content="镇长是邪教领袖", known_by=["镇长", "牧师"], layer=2)
     assert secret.layer == 2
     assert len(secret.known_by) == 2
 
 
-def test_tension_creation():
+def test_tension_creation() -> None:
     tension = Tension(parties=["镇长", "调查员"], nature="秘密", status="潜伏")
     assert tension.nature == "秘密"
 
 
-def test_timeline_event_creation():
+def test_timeline_event_creation() -> None:
     event = TimelineEvent(when="1920年春", event="矿坑坍塌", consequences="镇民恐慌")
     assert "矿坑" in event.event
 
 
-def test_research_question_creation():
+def test_research_question_creation() -> None:
     q = ResearchQuestion(topic="genre", question="调查类克苏鲁的经典模式？")
     assert q.topic == "genre"
 
 
-def test_research_note_creation():
+def test_research_note_creation() -> None:
     note = ResearchNote(
         topic="psychology",
         findings="面对不可名状恐惧时，人类会经历否认→恐惧→解离三阶段",
@@ -114,9 +116,9 @@ def test_research_note_creation():
     assert len(note.sources) == 2
 
 
-def _make_conflict_design(**overrides):
+def _make_conflict_design(**overrides: Any) -> ConflictDesign:
     """Helper to build a valid ConflictDesign with sensible defaults."""
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         narrative_strategy="通过日记碎片拼接揭示真相",
         threads=[
             ConflictThread(
@@ -165,7 +167,7 @@ def _make_conflict_design(**overrides):
     return ConflictDesign(**defaults)
 
 
-def test_conflict_design_creation():
+def test_conflict_design_creation() -> None:
     cd = _make_conflict_design()
     assert "日记" in cd.narrative_strategy
     assert len(cd.threads) == 2
@@ -174,7 +176,7 @@ def test_conflict_design_creation():
     assert zones_present == {"setup", "crucible", "aftermath"}
 
 
-def test_narrative_issue_creation():
+def test_narrative_issue_creation() -> None:
     issue = NarrativeIssue(
         dimension="tension_sufficiency",
         severity="major",
@@ -185,7 +187,7 @@ def test_narrative_issue_creation():
     assert issue.target == "outline"
 
 
-def test_narrative_issue_conflict_target():
+def test_narrative_issue_conflict_target() -> None:
     issue = NarrativeIssue(
         dimension="character_agency",
         severity="major",
@@ -199,7 +201,7 @@ def test_narrative_issue_conflict_target():
 # --- Task 2: WorldSetting new fields ---
 
 
-def test_world_setting_with_new_fields():
+def test_world_setting_with_new_fields() -> None:
     world = WorldSetting(
         era="1920年代",
         locations=[Location(name="阿卡姆镇", description="小镇")],
@@ -225,7 +227,7 @@ def test_world_setting_with_new_fields():
     assert len(world.timeline) == 1
 
 
-def test_world_setting_new_fields_default_empty():
+def test_world_setting_new_fields_default_empty() -> None:
     world = WorldSetting(
         era="1920年代",
         locations=[],
@@ -242,7 +244,7 @@ def test_world_setting_new_fields_default_empty():
 # --- Task 3: ChapterOutline new fields ---
 
 
-def test_chapter_outline_with_new_fields():
+def test_chapter_outline_with_new_fields() -> None:
     chapter = ChapterOutline(
         number=1,
         title="开端",
@@ -260,7 +262,7 @@ def test_chapter_outline_with_new_fields():
     assert chapter.twist == "手稿伪造"
 
 
-def test_chapter_outline_new_fields_defaults():
+def test_chapter_outline_new_fields_defaults() -> None:
     chapter = ChapterOutline(number=1, title="开端", summary="摘要", mood="悬疑", word_target=3000)
     assert chapter.pov == ""
     assert chapter.information_reveal == []
@@ -271,7 +273,7 @@ def test_chapter_outline_new_fields_defaults():
 # --- Task 4: StoryContext new fields ---
 
 
-def test_story_context_new_fields():
+def test_story_context_new_fields() -> None:
     ctx = StoryContext()
     assert ctx.research_questions == []
     assert ctx.research_notes == []
@@ -281,13 +283,13 @@ def test_story_context_new_fields():
 # --- key_beats ---
 
 
-def test_chapter_outline_key_beats_default():
+def test_chapter_outline_key_beats_default() -> None:
     """key_beats defaults to empty list for backward compatibility."""
     chapter = ChapterOutline(number=1, title="开端", summary="摘要", mood="悬疑", word_target=3000)
     assert chapter.key_beats == []
 
 
-def test_chapter_outline_with_key_beats():
+def test_chapter_outline_with_key_beats() -> None:
     chapter = ChapterOutline(
         number=1,
         title="开端",
@@ -302,7 +304,7 @@ def test_chapter_outline_with_key_beats():
 # --- chapter_endings ---
 
 
-def test_story_context_chapter_endings_default():
+def test_story_context_chapter_endings_default() -> None:
     ctx = StoryContext()
     assert ctx.chapter_endings == []
 
@@ -310,7 +312,7 @@ def test_story_context_chapter_endings_default():
 # --- ConflictDesign flat beats structure ---
 
 
-def test_conflict_thread_types():
+def test_conflict_thread_types() -> None:
     """thread_type Literal rejects invalid values."""
     # Valid
     t = ConflictThread(name="t", thread_type="epistemic", description="d", stakes="s")
@@ -318,10 +320,10 @@ def test_conflict_thread_types():
 
     # Invalid
     with pytest.raises(ValidationError):
-        ConflictThread(name="t", thread_type="invalid_type", description="d", stakes="s")
+        ConflictThread(name="t", thread_type="invalid_type", description="d", stakes="s")  # type: ignore[arg-type]
 
 
-def test_conflict_beats_zone_coverage():
+def test_conflict_beats_zone_coverage() -> None:
     """ConflictDesign rejects missing zones in beats."""
     base = _make_conflict_design()
 
@@ -339,7 +341,7 @@ def test_conflict_beats_zone_coverage():
         )
 
 
-def test_conflict_design_thread_count():
+def test_conflict_design_thread_count() -> None:
     """ConflictDesign requires 1-6 threads."""
     base = _make_conflict_design()
     beats = base.beats
@@ -368,7 +370,7 @@ def test_conflict_design_thread_count():
         )
 
 
-def test_story_context_roundtrip_with_new_conflict():
+def test_story_context_roundtrip_with_new_conflict() -> None:
     """StoryContext with new ConflictDesign survives to_dict/from_dict roundtrip."""
     ctx = StoryContext()
     ctx.conflict_design = _make_conflict_design()

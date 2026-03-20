@@ -4,14 +4,14 @@ from llm.provider import get_litellm_stream_params
 from models.story_context import StoryContext
 
 
-def test_brainstorm_agent_creation():
+def test_brainstorm_agent_creation() -> None:
     mock_llm = Mock()
     agent = BrainstormAgent(llm=mock_llm)
     assert agent is not None
     assert agent.conversation_history == []
 
 
-def test_extract_seed_from_json():
+def test_extract_seed_from_json() -> None:
     mock_llm = Mock()
     agent = BrainstormAgent(llm=mock_llm)
 
@@ -22,7 +22,7 @@ def test_extract_seed_from_json():
     assert result["era"] == "1920s"
 
 
-def test_chat_maintains_history():
+def test_chat_maintains_history() -> None:
     mock_llm = Mock()
     mock_llm.call.return_value = "你想写什么主题的克苏鲁故事？"
 
@@ -50,7 +50,7 @@ def _make_chunks(texts: list[str]) -> list[Mock]:
 
 
 @patch("agents.brainstorm.litellm")
-def test_chat_stream_yields_chunks(mock_litellm):
+def test_chat_stream_yields_chunks(mock_litellm: Mock) -> None:
     chunks = _make_chunks(["你好", "，", "世界"])
     mock_litellm.completion.return_value = chunks
 
@@ -65,7 +65,7 @@ def test_chat_stream_yields_chunks(mock_litellm):
 
 
 @patch("agents.brainstorm.litellm")
-def test_chat_stream_builds_messages(mock_litellm):
+def test_chat_stream_builds_messages(mock_litellm: Mock) -> None:
     mock_litellm.completion.return_value = _make_chunks(["ok"])
 
     agent = BrainstormAgent(llm=Mock())
@@ -84,7 +84,7 @@ def test_chat_stream_builds_messages(mock_litellm):
     assert "故事种子" in messages[3]["content"]
 
 
-def test_finalize_stream_updates_history_and_seed():
+def test_finalize_stream_updates_history_and_seed() -> None:
     agent = BrainstormAgent(llm=Mock())
     context = StoryContext()
 
@@ -98,7 +98,7 @@ def test_finalize_stream_updates_history_and_seed():
     assert context.seed["era"] == "1920s"
 
 
-def test_get_litellm_stream_params_anthropic():
+def test_get_litellm_stream_params_anthropic() -> None:
     config = {
         "type": "anthropic_compatible",
         "api_key": "sk-test",
@@ -113,7 +113,7 @@ def test_get_litellm_stream_params_anthropic():
     assert params["base_url"] == "https://api.example.com"
 
 
-def test_get_litellm_stream_params_openai():
+def test_get_litellm_stream_params_openai() -> None:
     config = {"type": "openai_compatible", "model": "gpt-4o-mini"}
     params = get_litellm_stream_params(config)
 

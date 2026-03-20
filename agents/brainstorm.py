@@ -30,7 +30,7 @@ class BrainstormAgent:
 
         return load_prompt_with_skills("prompts/brainstorm.md", "brainstorm")
 
-    def _extract_seed(self, text: str) -> dict:
+    def _extract_seed(self, text: str) -> dict[str, Any]:
         """Extract JSON seed from agent response."""
         from agents.json_utils import extract_json_object
 
@@ -53,7 +53,7 @@ class BrainstormAgent:
         ]
 
         logger.info("BrainstormAgent.chat: calling LLM with %d messages", len(messages))
-        result_text = self.llm.call(messages=messages)
+        result_text = self.llm.call(messages=messages)  # type: ignore[arg-type]
         logger.info("BrainstormAgent.chat: received response (%d chars)", len(result_text))
 
         self.conversation_history.append({"role": "assistant", "content": result_text})

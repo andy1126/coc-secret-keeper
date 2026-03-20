@@ -1,3 +1,5 @@
+from typing import Any
+
 from unittest.mock import Mock, patch
 from agents.narrative_reviewer import NarrativeReviewerAgent, NarrativeReviewResult
 from models.story_context import StoryContext
@@ -16,7 +18,7 @@ from models.schemas import (
 )
 
 
-def _make_full_context():
+def _make_full_context() -> StoryContext:
     ctx = StoryContext(seed={"theme": "调查", "era": "1920年代", "target_chapters": 10})
     ctx.world = WorldSetting(
         era="1924年",
@@ -42,15 +44,24 @@ def _make_full_context():
         narrative_strategy="逐步揭示",
         threads=[
             ConflictThread(
-                name="求知之祸", thread_type="epistemic", description="渴望vs恐惧", stakes="理智"
+                name="求知之祸",
+                thread_type="epistemic",
+                description="渴望vs恐惧",
+                stakes="理智",
             ),
             ConflictThread(
-                name="邪教操控", thread_type="societal", description="馆长阻止", stakes="生命"
+                name="邪教操控",
+                thread_type="societal",
+                description="馆长阻止",
+                stakes="生命",
             ),
         ],
         beats=[
             DramaticBeat(
-                zone="setup", name="发现笔记", description="发现笔记", threads=["求知之祸"]
+                zone="setup",
+                name="发现笔记",
+                description="发现笔记",
+                threads=["求知之祸"],
             ),
             DramaticBeat(
                 zone="crucible",
@@ -65,7 +76,10 @@ def _make_full_context():
                 threads=["求知之祸", "邪教操控"],
             ),
             DramaticBeat(
-                zone="aftermath", name="真相掩埋", description="真相掩埋", threads=["求知之祸"]
+                zone="aftermath",
+                name="真相掩埋",
+                description="真相掩埋",
+                threads=["求知之祸"],
             ),
         ],
         tension_shape="慢炖型",
@@ -89,7 +103,7 @@ def _make_full_context():
     return ctx
 
 
-def test_review_narrative_passed():
+def test_review_narrative_passed() -> None:
     agent = NarrativeReviewerAgent(llm=Mock())
     context = _make_full_context()
 
@@ -100,7 +114,7 @@ def test_review_narrative_passed():
     assert result.passed is True
 
 
-def test_review_narrative_with_conflict_target():
+def test_review_narrative_with_conflict_target() -> None:
     agent = NarrativeReviewerAgent(llm=Mock())
     context = _make_full_context()
 
@@ -121,8 +135,8 @@ def test_review_narrative_with_conflict_target():
     assert result.get_major_issues()[0].target == "conflict"
 
 
-def test_review_result_helpers():
-    data = {
+def test_review_result_helpers() -> None:
+    data: dict[str, Any] = {
         "passed": False,
         "issues": [
             {

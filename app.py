@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from io import BytesIO
@@ -13,7 +15,7 @@ from llm.provider import get_llm_for_agent, get_litellm_stream_params
 from ui.crew_progress import crew_progress
 
 
-def init_session():
+def init_session() -> None:
     """Initialize session state."""
     if "context" not in st.session_state:
         st.session_state.context = StoryContext()
@@ -63,7 +65,7 @@ def parse_save_data(raw: bytes) -> tuple[StoryContext, str, list[dict[str, str]]
     return context, stage, data["chat_history"]
 
 
-def render_sidebar():
+def render_sidebar() -> None:
     """Render sidebar with story info."""
     with st.sidebar:
         st.header("创作进度")
@@ -172,7 +174,7 @@ def render_sidebar():
                     st.error(f"存档读取失败: {e}")
 
 
-def render_brainstorm_stage():
+def render_brainstorm_stage() -> None:
     """Render brainstorm stage UI."""
     st.header("故事构思")
     st.write(
@@ -206,7 +208,7 @@ def render_brainstorm_stage():
             # 恢复之前的对话历史（排除刚追加的当前用户消息，chat_stream() 会自行追加）
             agent.conversation_history = list(st.session_state.chat_history[:-1])
             stream = agent.chat_stream(user_input, st.session_state.context, litellm_params)
-            response = st.write_stream(stream)
+            response = str(st.write_stream(stream))
             agent.finalize_stream(response, st.session_state.context)
 
         st.session_state.chat_history.append({"role": "assistant", "content": response})
@@ -280,7 +282,7 @@ def render_brainstorm_stage():
             st.rerun()
 
 
-def render_design_stage():
+def render_design_stage() -> None:
     """Render the unified design stage UI (world + conflict + outline)."""
     st.header("故事设计")
 
@@ -398,7 +400,7 @@ def render_design_stage():
                     st.rerun()
 
 
-def _run_design_generation(context, feedback=None):
+def _run_design_generation(context: StoryContext, feedback: str | None = None) -> None:
     """Run the full design team pipeline."""
     st.session_state._design_generating = True
     st.session_state._design_pending_feedback = feedback
@@ -431,9 +433,9 @@ def _run_design_generation(context, feedback=None):
 
         # Progress display
         progress_placeholder = st.empty()
-        phase_status = {}
+        phase_status: dict[str, str] = {}
 
-        def on_progress(phase, status):
+        def on_progress(phase: str, status: str) -> None:
             phase_labels = {
                 "research_questions": "生成研究问题",
                 "research": "深度研究",
@@ -485,8 +487,9 @@ def _run_design_generation(context, feedback=None):
     st.rerun()
 
 
-def _render_world_tab(context):
+def _render_world_tab(context: StoryContext) -> None:
     """Render world setting tab."""
+    assert context.world is not None
     world = context.world
     st.subheader("时代背景")
     st.write(world.era)
@@ -530,8 +533,9 @@ def _render_world_tab(context):
             st.caption(f"影响: {event.consequences}")
 
 
-def _render_conflict_tab(context):
+def _render_conflict_tab(context: StoryContext) -> None:
     """Render conflict design tab."""
+    assert context.conflict_design is not None
     cd = context.conflict_design
     st.subheader("叙事策略")
     st.write(cd.narrative_strategy)
@@ -574,7 +578,7 @@ def _render_conflict_tab(context):
         st.write(cd.thematic_throughline)
 
 
-def _render_outline_tab(context):
+def _render_outline_tab(context: StoryContext) -> None:
     """Render outline tab."""
     for chapter in context.outline:
         with st.expander(f"第{chapter.number}章: {chapter.title}"):
@@ -597,7 +601,7 @@ def _render_outline_tab(context):
                 st.write(f"**关键节拍**: {', '.join(chapter.key_beats)}")
 
 
-def _render_review_tab():
+def _render_review_tab() -> None:
     """Render narrative review tab."""
     review_data = st.session_state.get("design_review_result")
     if not review_data:
@@ -622,13 +626,21 @@ def _render_review_tab():
             st.write(f"- {s}")
 
 
-def _write_review_one_chapter(writer, reviewer, context, chapter, litellm_params):
+def _write_review_one_chapter(
+    writer: Any,
+    reviewer: Any,
+    context: StoryContext,
+    chapter: Any,
+    litellm_params: dict[str, Any],
+) -> tuple[Any, Any]:
     """Run write → review → revise loop for a single chapter.
 
     Returns (chapter_text, pending_review_or_None).
     If pending_review is not None, a major issue needs user decision.
     """
-    chapter_text = st.write_stream(writer.write_chapter_stream(context, chapter, litellm_params))
+    chapter_text = str(
+        st.write_stream(writer.write_chapter_stream(context, chapter, litellm_params))
+    )
     writer.finalize_write_chapter(chapter_text, context, chapter)
 
     max_revisions = 3
@@ -649,9 +661,11 @@ def _write_review_one_chapter(writer, reviewer, context, chapter, litellm_params
         if minor_issues:
             if revision < max_revisions - 1:
                 st.info(f"第{revision + 1}轮: 发现 {len(minor_issues)} 个小问题，自动修订中...")
-                chapter_text = st.write_stream(
-                    writer.revise_chapter_stream(
-                        context, chapter, chapter_text, minor_issues, litellm_params
+                chapter_text = str(
+                    st.write_stream(
+                        writer.revise_chapter_stream(
+                            context, chapter, chapter_text, minor_issues, litellm_params
+                        )
                     )
                 )
                 writer.finalize_revise_chapter(chapter_text, context, chapter)
@@ -666,7 +680,7 @@ def _write_review_one_chapter(writer, reviewer, context, chapter, litellm_params
     return chapter_text, None
 
 
-def _summarize_if_needed(writer, context, chapter_num):
+def _summarize_if_needed(writer: Any, context: StoryContext, chapter_num: int) -> None:
     """Generate summary for a chapter if it's missing.
 
     Handles the case where a chapter was written but its summary was not
@@ -681,7 +695,7 @@ def _summarize_if_needed(writer, context, chapter_num):
         context.chapter_summaries.append(summary)
 
 
-def render_writing_stage():
+def render_writing_stage() -> None:
     """Render writing stage UI.
 
     Implements auto-advancing chapter writing:
@@ -769,13 +783,15 @@ def render_writing_stage():
                     chapter_text = context.chapters[chapter_num - 1]
                     current_chapter = context.outline[chapter_num - 1]
 
-                    revised = st.write_stream(
-                        writer.revise_chapter_stream(
-                            context,
-                            current_chapter,
-                            chapter_text,
-                            selected_issues,
-                            litellm_params,
+                    revised = str(
+                        st.write_stream(
+                            writer.revise_chapter_stream(
+                                context,
+                                current_chapter,
+                                chapter_text,
+                                selected_issues,
+                                litellm_params,
+                            )
                         )
                     )
                     writer.finalize_revise_chapter(revised, context, current_chapter)
@@ -807,13 +823,15 @@ def render_writing_stage():
                         }
                     ]
 
-                    revised = st.write_stream(
-                        writer.revise_chapter_stream(
-                            context,
-                            current_chapter,
-                            chapter_text,
-                            custom_issues,
-                            litellm_params,
+                    revised = str(
+                        st.write_stream(
+                            writer.revise_chapter_stream(
+                                context,
+                                current_chapter,
+                                chapter_text,
+                                custom_issues,
+                                litellm_params,
+                            )
                         )
                     )
                     writer.finalize_revise_chapter(revised, context, current_chapter)
@@ -903,13 +921,15 @@ def render_writing_stage():
 
                     writer = WriterAgent(writer_llm)
 
-                    revised = st.write_stream(
-                        writer.revise_chapter_stream(
-                            context,
-                            current_chapter,
-                            chapter_text,
-                            minor_issues,
-                            litellm_params,
+                    revised = str(
+                        st.write_stream(
+                            writer.revise_chapter_stream(
+                                context,
+                                current_chapter,
+                                chapter_text,
+                                minor_issues,
+                                litellm_params,
+                            )
                         )
                     )
                     writer.finalize_revise_chapter(revised, context, current_chapter)
@@ -998,7 +1018,7 @@ def render_writing_stage():
             st.write(text[:500] + "..." if len(text) > 500 else text)
 
 
-def render_review_stage():
+def render_review_stage() -> None:
     """Render final review stage UI.
 
     Performs full-text final review as required by Design:
@@ -1089,7 +1109,7 @@ def render_review_stage():
             st.caption("提示: 请确保系统已安装中文字体")
 
 
-def render_settings():
+def render_settings() -> None:
     """Render settings page."""
     st.header("设置")
 
@@ -1170,7 +1190,7 @@ def render_settings():
 
     if st.button("保存设置"):
         import os
-        import yaml
+        import yaml  # type: ignore[import-untyped]
 
         # Save api keys to environment for current session
         for name, edits in provider_edits.items():
@@ -1197,7 +1217,7 @@ def render_settings():
     )
 
 
-def main():
+def main() -> None:
     """Main app entry point."""
     st.set_page_config(
         page_title="CoC Story Generator",

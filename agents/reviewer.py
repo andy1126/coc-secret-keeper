@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import json
 import logging
-from crewai import Agent, Task, Crew
+from typing import Any
+
+from crewai import Agent, Task, Crew, LLM
 
 from models.story_context import StoryContext
 
@@ -10,23 +14,23 @@ logger = logging.getLogger("coc.llm")
 class ReviewResult:
     """Review result with issues classification."""
 
-    def __init__(self, data: dict):
-        self.passed = data.get("passed", False)
-        self.issues = data.get("issues", [])
-        self.strengths = data.get("strengths", [])
-        self.overall_assessment = data.get("overall_assessment", "")
+    def __init__(self, data: dict[str, Any]) -> None:
+        self.passed: bool = data.get("passed", False)
+        self.issues: list[dict[str, Any]] = data.get("issues", [])
+        self.strengths: list[str] = data.get("strengths", [])
+        self.overall_assessment: str = data.get("overall_assessment", "")
 
-    def get_minor_issues(self) -> list[dict]:
+    def get_minor_issues(self) -> list[dict[str, Any]]:
         return [i for i in self.issues if str(i.get("severity", "")).strip().lower() == "minor"]
 
-    def get_major_issues(self) -> list[dict]:
+    def get_major_issues(self) -> list[dict[str, Any]]:
         return [i for i in self.issues if str(i.get("severity", "")).strip().lower() == "major"]
 
 
 class ReviewerAgent:
     """Agent for reviewing chapter quality."""
 
-    def __init__(self, llm):
+    def __init__(self, llm: LLM) -> None:
         self.llm = llm
         self.prompt = self._load_prompt()
 

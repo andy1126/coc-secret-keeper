@@ -1,10 +1,12 @@
 """Shared JSON extraction utilities for agents."""
 
+from __future__ import annotations
+
 import json
 import logging
 import re
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger("coc.llm")
 
@@ -56,11 +58,12 @@ def run_with_retry(
     raise last_error  # type: ignore[misc]
 
 
-def _try_parse_json(raw: str) -> dict | None:
+def _try_parse_json(raw: str) -> dict[str, Any] | None:
     """Try to parse JSON, with fallback cleanup for common LLM quirks."""
     # Direct parse
     try:
-        return json.loads(raw)
+        result: dict[str, Any] = json.loads(raw)
+        return result
     except json.JSONDecodeError:
         pass
 
@@ -69,12 +72,13 @@ def _try_parse_json(raw: str) -> dict | None:
     # Cleanup: remove single-line comments
     cleaned = re.sub(r"//[^\n]*", "", cleaned)
     try:
-        return json.loads(cleaned)
+        result = json.loads(cleaned)
+        return result
     except json.JSONDecodeError:
         return None
 
 
-def _find_json_by_braces(text: str) -> dict | None:
+def _find_json_by_braces(text: str) -> dict[str, Any] | None:
     """Find a JSON object using brace counting, handling strings correctly."""
     pos = 0
     while pos < len(text):
@@ -117,7 +121,7 @@ def _find_json_by_braces(text: str) -> dict | None:
     return None
 
 
-def extract_json_object(text: str) -> dict | None:
+def extract_json_object(text: str) -> dict[str, Any] | None:
     """Extract the first complete JSON object from LLM response text.
 
     Strategy:

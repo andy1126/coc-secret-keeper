@@ -86,7 +86,7 @@ class ConflictDesign(BaseModel):
     thematic_throughline: str = Field(description="主题贯穿线")
 
     @model_validator(mode="after")
-    def validate_structure(self):
+    def validate_structure(self) -> "ConflictDesign":
         """Validate structural constraints."""
         if not (1 <= len(self.threads) <= 6):
             raise ValueError(f"threads count must be 1-6, got {len(self.threads)}")

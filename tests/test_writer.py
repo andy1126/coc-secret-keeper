@@ -1,16 +1,18 @@
+from typing import Any
+
 from unittest.mock import Mock, patch, MagicMock
 from agents.writer import WriterAgent
 from models.story_context import StoryContext
 from models.schemas import ChapterOutline, WorldSetting, Character, Location
 
 
-def test_writer_creation():
+def test_writer_creation() -> None:
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
     assert agent is not None
 
 
-def test_write_chapter():
+def test_write_chapter() -> None:
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
 
@@ -56,7 +58,7 @@ def test_write_chapter():
     assert "章摘要:" in task_desc
 
 
-def test_write_chapter_first_chapter():
+def test_write_chapter_first_chapter() -> None:
     """First chapter should show '无' for previous summaries."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -86,7 +88,7 @@ def test_write_chapter_first_chapter():
     assert "无" in task_desc
 
 
-def test_summarize_chapter():
+def test_summarize_chapter() -> None:
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
 
@@ -112,7 +114,7 @@ def test_summarize_chapter():
     assert "第1章" in task_desc
 
 
-def test_write_chapter_includes_key_beats():
+def test_write_chapter_includes_key_beats() -> None:
     """key_beats should appear as a checklist in task_desc."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -145,7 +147,7 @@ def test_write_chapter_includes_key_beats():
     assert "MUST cover every key beat" in task_desc
 
 
-def test_write_chapter_includes_next_chapter_preview():
+def test_write_chapter_includes_next_chapter_preview() -> None:
     """Non-last chapter should include next chapter preview."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -170,7 +172,7 @@ def test_write_chapter_includes_next_chapter_preview():
     assert "Next Chapter Preview" in task_desc
 
 
-def test_write_chapter_last_chapter_no_next_preview():
+def test_write_chapter_last_chapter_no_next_preview() -> None:
     """Last chapter should show ending instruction."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -193,7 +195,7 @@ def test_write_chapter_last_chapter_no_next_preview():
     assert "最后一章" in task_desc
 
 
-def test_write_chapter_includes_previous_ending():
+def test_write_chapter_includes_previous_ending() -> None:
     """Non-first chapter should include previous chapter ending."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -219,7 +221,7 @@ def test_write_chapter_includes_previous_ending():
     assert "Previous Chapter Ending" in task_desc
 
 
-def test_write_chapter_appends_chapter_ending():
+def test_write_chapter_appends_chapter_ending() -> None:
     """write_chapter should append last 500 chars to chapter_endings."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -246,7 +248,7 @@ def test_write_chapter_appends_chapter_ending():
 # -- Helper extraction tests --
 
 
-def test_build_write_task_desc():
+def test_build_write_task_desc() -> None:
     """Extracted helper should produce same task_desc content."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -279,7 +281,7 @@ def test_build_write_task_desc():
     assert "chapter 2" in task_desc.lower()
 
 
-def test_build_revise_task_desc():
+def test_build_revise_task_desc() -> None:
     """Extracted helper should include issues list."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -287,7 +289,7 @@ def test_build_revise_task_desc():
     context = StoryContext()
     context.seed = {"theme": "调查"}
     chapter = ChapterOutline(number=1, title="开端", summary="开始", mood="悬疑", word_target=500)
-    issues = [
+    issues: list[dict[str, Any]] = [
         {"category": "pacing", "description": "节奏太慢", "suggestion": "加快节奏"},
         {"category": "dialogue", "description": "对话生硬", "suggestion": "更自然"},
     ]
@@ -302,7 +304,7 @@ def test_build_revise_task_desc():
 # -- Streaming tests --
 
 
-def _make_fake_chunks(texts):
+def _make_fake_chunks(texts: list[str | None]) -> list[MagicMock]:
     """Create fake litellm streaming chunks."""
     chunks = []
     for text in texts:
@@ -313,7 +315,7 @@ def _make_fake_chunks(texts):
     return chunks
 
 
-def test_write_chapter_stream():
+def test_write_chapter_stream() -> None:
     """write_chapter_stream should yield content chunks from litellm."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -342,7 +344,7 @@ def test_write_chapter_stream():
     assert call_kwargs.kwargs["stream"] is True
 
 
-def test_finalize_write_chapter():
+def test_finalize_write_chapter() -> None:
     """finalize_write_chapter should update context.chapters and chapter_endings."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -359,7 +361,7 @@ def test_finalize_write_chapter():
     assert len(context.chapter_endings[0]) == 500
 
 
-def test_finalize_write_chapter_replace():
+def test_finalize_write_chapter_replace() -> None:
     """finalize_write_chapter should replace existing chapter slot."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -375,7 +377,7 @@ def test_finalize_write_chapter_replace():
     assert context.chapter_endings[0] == "new content"
 
 
-def test_finalize_revise_chapter():
+def test_finalize_revise_chapter() -> None:
     """finalize_revise_chapter should replace chapter and ending."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)
@@ -392,7 +394,7 @@ def test_finalize_revise_chapter():
     assert len(context.chapter_endings[0]) == 500
 
 
-def test_write_chapter_still_works():
+def test_write_chapter_still_works() -> None:
     """Original non-streaming write_chapter should still work correctly."""
     mock_llm = Mock()
     agent = WriterAgent(llm=mock_llm)

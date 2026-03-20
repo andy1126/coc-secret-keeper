@@ -71,7 +71,7 @@ def _make_full_context() -> StoryContext:
 # --- Tests ---
 
 
-def test_save_progress_schema():
+def test_save_progress_schema() -> None:
     ctx = StoryContext(seed={"theme": "测试"})
     data = build_save_data(ctx, "brainstorm", [])
 
@@ -82,7 +82,7 @@ def test_save_progress_schema():
     assert data["chat_history"] == []
 
 
-def test_save_load_roundtrip():
+def test_save_load_roundtrip() -> None:
     ctx = _make_full_context()
     chat = [{"role": "user", "content": "你好"}, {"role": "assistant", "content": "开始"}]
 
@@ -96,18 +96,18 @@ def test_save_load_roundtrip():
     assert loaded_ctx.to_dict() == ctx.to_dict()
 
 
-def test_load_invalid_json():
+def test_load_invalid_json() -> None:
     with pytest.raises(ValueError, match="无效的 JSON"):
         parse_save_data(b"not json at all")
 
 
-def test_load_missing_keys():
+def test_load_missing_keys() -> None:
     incomplete = json.dumps({"version": 1, "stage": "brainstorm"}).encode()
     with pytest.raises(ValueError, match="缺少必要字段"):
         parse_save_data(incomplete)
 
 
-def test_load_invalid_stage():
+def test_load_invalid_stage() -> None:
     data = {
         "version": 1,
         "stage": "nonexistent",
@@ -118,7 +118,7 @@ def test_load_invalid_stage():
         parse_save_data(json.dumps(data).encode())
 
 
-def test_load_invalid_context():
+def test_load_invalid_context() -> None:
     data = {
         "version": 1,
         "stage": "brainstorm",
@@ -129,7 +129,7 @@ def test_load_invalid_context():
         parse_save_data(json.dumps(data).encode())
 
 
-def test_save_at_each_stage():
+def test_save_at_each_stage() -> None:
     for stage in VALID_STAGES:
         ctx = StoryContext()
         data = build_save_data(ctx, stage, [])
@@ -138,7 +138,7 @@ def test_save_at_each_stage():
         assert loaded_stage == stage
 
 
-def test_save_load_partial_design_research_only():
+def test_save_load_partial_design_research_only() -> None:
     """Partial design: research_questions populated, world is None."""
     ctx = StoryContext(
         seed={"theme": "恐怖", "target_chapters": 8},
@@ -158,7 +158,7 @@ def test_save_load_partial_design_research_only():
     assert loaded_ctx.outline == []
 
 
-def test_save_load_partial_design_through_world():
+def test_save_load_partial_design_through_world() -> None:
     """Partial design: world populated, conflict_design is None."""
     world = WorldSetting(
         era="1920年代",

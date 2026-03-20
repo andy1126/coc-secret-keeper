@@ -4,13 +4,13 @@ from models.story_context import StoryContext
 from models.schemas import WorldSetting, ResearchQuestion
 
 
-def test_worldbuilder_creation():
+def test_worldbuilder_creation() -> None:
     mock_llm = Mock()
     agent = WorldbuilderAgent(llm=mock_llm)
     assert agent is not None
 
 
-def test_build_world():
+def test_build_world() -> None:
     mock_llm = Mock()
     agent = WorldbuilderAgent(llm=mock_llm)
 
@@ -37,7 +37,7 @@ def test_build_world():
     assert "阿卡姆" in world.era
 
 
-def test_generate_questions():
+def test_generate_questions() -> None:
     mock_llm = Mock()
     agent = WorldbuilderAgent(llm=mock_llm)
     context = StoryContext(seed={"theme": "调查", "era": "1920年代", "atmosphere": "心理恐怖"})
@@ -63,7 +63,7 @@ def test_generate_questions():
     assert len(context.research_questions) == 4
 
 
-def test_build_world_with_new_fields():
+def test_build_world_with_new_fields() -> None:
     mock_llm = Mock()
     agent = WorldbuilderAgent(llm=mock_llm)
     context = StoryContext(seed={"theme": "调查", "era": "1920年代", "atmosphere": "心理恐怖"})

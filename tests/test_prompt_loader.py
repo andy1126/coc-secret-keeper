@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from agents.prompt_loader import load_prompt_with_skills
 
 
@@ -10,7 +12,7 @@ def _setup(tmp_path: Path, base_content: str = "base prompt") -> str:
     return str(base)
 
 
-def test_no_skill_folder(tmp_path, monkeypatch):
+def test_no_skill_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("agents.prompt_loader.SKILLS_DIR", tmp_path / "skills")
     base_path = _setup(tmp_path)
 
@@ -19,7 +21,7 @@ def test_no_skill_folder(tmp_path, monkeypatch):
     assert result == "base prompt"
 
 
-def test_empty_skill_folder(tmp_path, monkeypatch):
+def test_empty_skill_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     skill_dir = tmp_path / "skills" / "writer"
     skill_dir.mkdir(parents=True)
     monkeypatch.setattr("agents.prompt_loader.SKILLS_DIR", tmp_path / "skills")
@@ -30,7 +32,7 @@ def test_empty_skill_folder(tmp_path, monkeypatch):
     assert result == "base prompt"
 
 
-def test_one_skill(tmp_path, monkeypatch):
+def test_one_skill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     skill_dir = tmp_path / "skills" / "writer"
     skill_dir.mkdir(parents=True)
     (skill_dir / "atmosphere.md").write_text("atmosphere content", encoding="utf-8")
@@ -42,7 +44,7 @@ def test_one_skill(tmp_path, monkeypatch):
     assert result == "base prompt\n\n---\n\n## Skill: atmosphere\n\natmosphere content"
 
 
-def test_multiple_skills_sorted(tmp_path, monkeypatch):
+def test_multiple_skills_sorted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     skill_dir = tmp_path / "skills" / "writer"
     skill_dir.mkdir(parents=True)
     (skill_dir / "zen.md").write_text("zen content", encoding="utf-8")
@@ -57,7 +59,7 @@ def test_multiple_skills_sorted(tmp_path, monkeypatch):
     assert result.index("alpha") < result.index("zen")
 
 
-def test_empty_skill_file_skipped(tmp_path, monkeypatch):
+def test_empty_skill_file_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     skill_dir = tmp_path / "skills" / "writer"
     skill_dir.mkdir(parents=True)
     (skill_dir / "empty.md").write_text("   \n  ", encoding="utf-8")
@@ -71,7 +73,7 @@ def test_empty_skill_file_skipped(tmp_path, monkeypatch):
     assert "## Skill: real\n\nreal content" in result
 
 
-def test_non_md_files_ignored(tmp_path, monkeypatch):
+def test_non_md_files_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     skill_dir = tmp_path / "skills" / "writer"
     skill_dir.mkdir(parents=True)
     (skill_dir / "notes.txt").write_text("should be ignored", encoding="utf-8")
@@ -84,7 +86,7 @@ def test_non_md_files_ignored(tmp_path, monkeypatch):
     assert result == "base prompt"
 
 
-def test_underscore_replaced_in_skill_name(tmp_path, monkeypatch):
+def test_underscore_replaced_in_skill_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     skill_dir = tmp_path / "skills" / "writer"
     skill_dir.mkdir(parents=True)
     (skill_dir / "dark_atmosphere.md").write_text("dark", encoding="utf-8")

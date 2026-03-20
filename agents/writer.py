@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import json
 import logging
 from collections.abc import Generator
 from typing import Any
 
 import litellm
-from crewai import Agent, Task, Crew
+from crewai import Agent, Task, Crew, LLM
 
 from models.story_context import StoryContext
 from models.schemas import ChapterOutline
@@ -15,7 +17,7 @@ logger = logging.getLogger("coc.llm")
 class WriterAgent:
     """Agent for writing chapter content."""
 
-    def __init__(self, llm):
+    def __init__(self, llm: LLM) -> None:
         self.llm = llm
         self.prompt = self._load_prompt()
 
@@ -138,7 +140,7 @@ until all beats have been addressed. Check this list before writing your ending.
         context: StoryContext,
         chapter: ChapterOutline,
         chapter_text: str,
-        issues: list[dict],
+        issues: list[dict[str, Any]],
     ) -> str:
         """Build the task description for revising a chapter."""
         issues_desc = "\n".join(
@@ -215,7 +217,7 @@ Rewrite the chapter fixing all listed issues while maintaining the same story fl
         context: StoryContext,
         chapter: ChapterOutline,
         chapter_text: str,
-        issues: list[dict],
+        issues: list[dict[str, Any]],
     ) -> str:
         """Revise a chapter based on review feedback."""
         task_desc = self._build_revise_task_desc(context, chapter, chapter_text, issues)
@@ -282,7 +284,7 @@ Rewrite the chapter fixing all listed issues while maintaining the same story fl
         context: StoryContext,
         chapter: ChapterOutline,
         chapter_text: str,
-        issues: list[dict],
+        issues: list[dict[str, Any]],
         litellm_params: dict[str, Any],
     ) -> Generator[str, None, None]:
         """Stream chapter revision token-by-token via litellm.

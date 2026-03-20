@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import json
 import logging
-from crewai import Agent, Task, Crew
+from typing import Any
+
+from crewai import Agent, Task, Crew, LLM
 
 from models.story_context import StoryContext
 from models.schemas import NarrativeIssue
@@ -11,7 +15,7 @@ logger = logging.getLogger("coc.llm")
 class NarrativeReviewResult:
     """Narrative review result with issue classification and routing."""
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict[str, Any]) -> None:
         self.passed = data.get("passed", False)
         self.issues = [NarrativeIssue(**i) for i in data.get("issues", [])]
         self.strengths = data.get("strengths", [])
@@ -35,7 +39,7 @@ class NarrativeReviewResult:
 class NarrativeReviewerAgent:
     """Agent for auditing narrative quality across 6 dimensions."""
 
-    def __init__(self, llm):
+    def __init__(self, llm: LLM) -> None:
         self.llm = llm
         self.prompt = self._load_prompt()
 

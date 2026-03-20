@@ -17,11 +17,11 @@ from models.schemas import (
 )
 
 
-def _make_context():
+def _make_context() -> StoryContext:
     return StoryContext(seed={"theme": "调查", "era": "1920年代", "target_chapters": 10})
 
 
-def _make_world():
+def _make_world() -> WorldSetting:
     return WorldSetting(
         era="1924",
         locations=[Location(name="图书馆", description="禁书")],
@@ -41,20 +41,29 @@ def _make_world():
     )
 
 
-def _make_conflict():
+def _make_conflict() -> ConflictDesign:
     return ConflictDesign(
         narrative_strategy="逐步揭示",
         threads=[
             ConflictThread(
-                name="求知之祸", thread_type="epistemic", description="渴望vs恐惧", stakes="理智"
+                name="求知之祸",
+                thread_type="epistemic",
+                description="渴望vs恐惧",
+                stakes="理智",
             ),
             ConflictThread(
-                name="邪教操控", thread_type="societal", description="馆长阻止", stakes="生命"
+                name="邪教操控",
+                thread_type="societal",
+                description="馆长阻止",
+                stakes="生命",
             ),
         ],
         beats=[
             DramaticBeat(
-                zone="setup", name="发现笔记", description="发现笔记", threads=["求知之祸"]
+                zone="setup",
+                name="发现笔记",
+                description="发现笔记",
+                threads=["求知之祸"],
             ),
             DramaticBeat(
                 zone="crucible",
@@ -69,7 +78,10 @@ def _make_conflict():
                 threads=["求知之祸", "邪教操控"],
             ),
             DramaticBeat(
-                zone="aftermath", name="真相掩埋", description="真相掩埋", threads=["求知之祸"]
+                zone="aftermath",
+                name="真相掩埋",
+                description="真相掩埋",
+                threads=["求知之祸"],
             ),
         ],
         tension_shape="慢炖型",
@@ -77,7 +89,7 @@ def _make_conflict():
     )
 
 
-def _make_outline():
+def _make_outline() -> list[ChapterOutline]:
     return [
         ChapterOutline(
             number=1,
@@ -89,11 +101,11 @@ def _make_outline():
     ]
 
 
-def _make_passing_review():
+def _make_passing_review() -> NarrativeReviewResult:
     return NarrativeReviewResult({"passed": True, "issues": [], "strengths": ["张力充分"]})
 
 
-def _make_failing_review(target="outline"):
+def _make_failing_review(target: str = "outline") -> NarrativeReviewResult:
     return NarrativeReviewResult(
         {
             "passed": False,
@@ -111,7 +123,7 @@ def _make_failing_review(target="outline"):
     )
 
 
-def _make_mock_agents():
+def _make_mock_agents() -> tuple[Mock, Mock, Mock, Mock, Mock]:
     worldbuilder = Mock()
     worldbuilder.generate_questions.side_effect = lambda ctx: setattr(
         ctx,
@@ -143,7 +155,7 @@ def _make_mock_agents():
     return worldbuilder, researcher, conflict_architect, outliner, reviewer
 
 
-def test_design_team_full_pipeline_passes():
+def test_design_team_full_pipeline_passes() -> None:
     """Happy path: all 4 phases run, reviewer passes."""
     ctx = _make_context()
     wb, res, ca, out, rev = _make_mock_agents()
@@ -161,7 +173,7 @@ def test_design_team_full_pipeline_passes():
     rev.review_narrative.assert_called_once()
 
 
-def test_design_team_iterates_on_outline_issue():
+def test_design_team_iterates_on_outline_issue() -> None:
     """Outline-only issue: only outliner reruns."""
     ctx = _make_context()
     wb, res, ca, out, rev = _make_mock_agents()
@@ -179,7 +191,7 @@ def test_design_team_iterates_on_outline_issue():
     assert out.create_outline.call_count == 2
 
 
-def test_design_team_iterates_on_conflict_issue():
+def test_design_team_iterates_on_conflict_issue() -> None:
     """Conflict issue: conflict architect + outliner rerun."""
     ctx = _make_context()
     wb, res, ca, out, rev = _make_mock_agents()
@@ -196,7 +208,7 @@ def test_design_team_iterates_on_conflict_issue():
     assert out.create_outline.call_count == 2
 
 
-def test_design_team_iterates_on_world_issue():
+def test_design_team_iterates_on_world_issue() -> None:
     """World issue: world + conflict + outline all rebuild."""
     ctx = _make_context()
     wb, res, ca, out, rev = _make_mock_agents()
@@ -213,7 +225,7 @@ def test_design_team_iterates_on_world_issue():
     assert out.create_outline.call_count == 2
 
 
-def test_design_team_max_iterations():
+def test_design_team_max_iterations() -> None:
     """After 2 failed rounds, stops and returns."""
     ctx = _make_context()
     wb, res, ca, out, rev = _make_mock_agents()
@@ -226,13 +238,13 @@ def test_design_team_max_iterations():
     assert rev.review_narrative.call_count == 3
 
 
-def test_design_team_progress_callback():
+def test_design_team_progress_callback() -> None:
     """Progress callback is called for each phase."""
     ctx = _make_context()
     wb, res, ca, out, rev = _make_mock_agents()
-    progress_calls = []
+    progress_calls: list[tuple[str, str]] = []
 
-    def on_progress(phase, status):
+    def on_progress(phase: str, status: str) -> None:
         progress_calls.append((phase, status))
 
     run_design_team(ctx, wb, res, ca, out, rev, on_progress=on_progress)
@@ -246,7 +258,7 @@ def test_design_team_progress_callback():
     assert "review" in phase_names
 
 
-def test_format_issues():
+def test_format_issues() -> None:
     issues = [
         NarrativeIssue(
             dimension="tension_sufficiency",
@@ -264,34 +276,34 @@ def test_format_issues():
 # --- detect_resume_point tests ---
 
 
-def test_detect_resume_point_empty():
+def test_detect_resume_point_empty() -> None:
     """Empty context returns 0 (start from beginning)."""
     ctx = _make_context()
     assert detect_resume_point(ctx) == 0
 
 
-def test_detect_resume_point_partial():
+def test_detect_resume_point_partial() -> None:
     """Partial completion returns correct resume index."""
     ctx = _make_context()
 
-    # Phase 0 done → resume at 1
+    # Phase 0 done -> resume at 1
     ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
     assert detect_resume_point(ctx) == 1
 
-    # Phase 0+1 done → resume at 2
+    # Phase 0+1 done -> resume at 2
     ctx.research_notes = [ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])]
     assert detect_resume_point(ctx) == 2
 
-    # Phase 0+1+2 done → resume at 3
+    # Phase 0+1+2 done -> resume at 3
     ctx.world = _make_world()
     assert detect_resume_point(ctx) == 3
 
-    # Phase 0+1+2+3 done → resume at 4
+    # Phase 0+1+2+3 done -> resume at 4
     ctx.conflict_design = _make_conflict()
     assert detect_resume_point(ctx) == 4
 
 
-def test_detect_resume_point_all_done():
+def test_detect_resume_point_all_done() -> None:
     """All phases complete returns 5."""
     ctx = _make_context()
     ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
@@ -302,14 +314,14 @@ def test_detect_resume_point_all_done():
     assert detect_resume_point(ctx) == 5
 
 
-def test_detect_resume_point_inconsistent():
-    """Inconsistent state (world exists but research missing) → waterfall resets to 0."""
+def test_detect_resume_point_inconsistent() -> None:
+    """Inconsistent state (world exists but research missing) -> waterfall resets to 0."""
     ctx = _make_context()
     ctx.world = _make_world()  # skip research phases
     assert detect_resume_point(ctx) == 0
 
 
-def test_run_design_team_skips_completed():
+def test_run_design_team_skips_completed() -> None:
     """When context has phases 0-2 done, those agents are not called."""
     ctx = _make_context()
     ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
@@ -331,16 +343,16 @@ def test_run_design_team_skips_completed():
     assert result.review.passed is True
 
 
-def test_run_design_team_progress_reports_skipped():
+def test_run_design_team_progress_reports_skipped() -> None:
     """Completed phases report 'skipped' via progress callback."""
     ctx = _make_context()
     ctx.research_questions = [ResearchQuestion(topic="genre", question="经典模式？")]
     ctx.research_notes = [ResearchNote(topic="genre", findings="渐进揭示", sources=["引用"])]
 
     wb, res, ca, out, rev = _make_mock_agents()
-    progress_calls = []
+    progress_calls: list[tuple[str, str]] = []
 
-    def on_progress(phase, status):
+    def on_progress(phase: str, status: str) -> None:
         progress_calls.append((phase, status))
 
     run_design_team(ctx, wb, res, ca, out, rev, on_progress=on_progress)

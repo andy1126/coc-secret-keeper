@@ -6,13 +6,13 @@ from models.schemas import ChapterOutline
 import pytest
 
 
-def test_reviewer_creation():
+def test_reviewer_creation() -> None:
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
     assert agent is not None
 
 
-def test_review_chapter():
+def test_review_chapter() -> None:
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
 
@@ -59,7 +59,7 @@ def test_review_chapter():
     assert "摘要:" in task_desc
 
 
-def test_review_completeness_issue():
+def test_review_completeness_issue() -> None:
     """Reviewer should detect completeness issues as major."""
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
@@ -104,7 +104,7 @@ def test_review_completeness_issue():
     assert result.get_major_issues()[0]["category"] == "completeness"
 
 
-def test_final_review_uses_summaries():
+def test_final_review_uses_summaries() -> None:
     """Final review should use chapter_summaries, not full text."""
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
@@ -147,7 +147,7 @@ def test_final_review_uses_summaries():
     assert "宏观" in task_desc
 
 
-def test_final_review_guard_mismatch():
+def test_final_review_guard_mismatch() -> None:
     """Final review should raise ValueError when summaries/chapters mismatch."""
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
@@ -161,7 +161,7 @@ def test_final_review_guard_mismatch():
         agent.final_review(context)
 
 
-def test_review_includes_key_beats_check():
+def test_review_includes_key_beats_check() -> None:
     """Reviewer task_desc should include key_beats check items."""
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
@@ -180,7 +180,8 @@ def test_review_includes_key_beats_check():
     ]
 
     mock_result = (
-        '```json\n{"passed": true, "issues": [], "strengths": [], "overall_assessment": "ok"}\n```'
+        '```json\n{"passed": true, "issues": [], "strengths": [],'
+        ' "overall_assessment": "ok"}\n```'
     )
 
     with patch.object(agent, "_run_agent", return_value=mock_result) as mock_run:
@@ -192,7 +193,7 @@ def test_review_includes_key_beats_check():
     assert "key beat" in task_desc
 
 
-def test_review_includes_previous_ending():
+def test_review_includes_previous_ending() -> None:
     """Non-first chapter review should include previous chapter ending."""
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
@@ -206,7 +207,8 @@ def test_review_includes_previous_ending():
     ]
 
     mock_result = (
-        '```json\n{"passed": true, "issues": [], "strengths": [], "overall_assessment": "ok"}\n```'
+        '```json\n{"passed": true, "issues": [], "strengths": [],'
+        ' "overall_assessment": "ok"}\n```'
     )
 
     with patch.object(agent, "_run_agent", return_value=mock_result) as mock_run:
@@ -217,7 +219,7 @@ def test_review_includes_previous_ending():
     assert "Previous Chapter Ending" in task_desc
 
 
-def test_review_includes_transition_check():
+def test_review_includes_transition_check() -> None:
     """Non-first chapter review should include transition check."""
     mock_llm = Mock()
     agent = ReviewerAgent(llm=mock_llm)
@@ -230,7 +232,8 @@ def test_review_includes_transition_check():
     ]
 
     mock_result = (
-        '```json\n{"passed": true, "issues": [], "strengths": [], "overall_assessment": "ok"}\n```'
+        '```json\n{"passed": true, "issues": [], "strengths": [],'
+        ' "overall_assessment": "ok"}\n```'
     )
 
     with patch.object(agent, "_run_agent", return_value=mock_result) as mock_run:

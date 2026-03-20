@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
 
 logger = logging.getLogger("coc.llm")
 
 
-def setup_logging():
+def setup_logging() -> None:
     """Configure coc.llm logger with console and file handlers.
 
     Idempotent: skips if handlers already attached (prevents duplicates on Streamlit rerun).
@@ -51,11 +54,15 @@ def _truncate(text: str, max_len: int = 200) -> str:
 class CoCLLMLogger(CustomLogger):
     """litellm callback logger for CoC LLM interactions."""
 
-    def log_pre_api_call(self, model, messages, kwargs):
+    def log_pre_api_call(
+        self, model: str, messages: list[dict[str, Any]], kwargs: dict[str, Any]
+    ) -> None:
         summary = _truncate(str(messages[-1]["content"])) if messages else ""
         logger.info("LLM REQUEST  model=%s messages=%d last=%s", model, len(messages), summary)
 
-    def log_success_event(self, kwargs, response_obj, start_time, end_time):
+    def log_success_event(
+        self, kwargs: dict[str, Any], response_obj: Any, start_time: Any, end_time: Any
+    ) -> None:
         if kwargs.get("stream"):
             return  # Streaming chunks logged by agent after full response collected
         model = kwargs.get("model", "unknown")
@@ -72,7 +79,9 @@ class CoCLLMLogger(CustomLogger):
             _truncate(content),
         )
 
-    def log_failure_event(self, kwargs, response_obj, start_time, end_time):
+    def log_failure_event(
+        self, kwargs: dict[str, Any], response_obj: Any, start_time: Any, end_time: Any
+    ) -> None:
         model = kwargs.get("model", "unknown")
         duration = round(end_time - start_time, 2) if isinstance(start_time, float) else "N/A"
         error = kwargs.get("exception", response_obj)

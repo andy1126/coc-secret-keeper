@@ -4,12 +4,12 @@ from models.story_context import StoryContext
 from models.schemas import ResearchQuestion, ResearchNote
 
 
-def test_researcher_creation():
+def test_researcher_creation() -> None:
     agent = ResearcherAgent(llm=Mock())
     assert agent is not None
 
 
-def test_research():
+def test_research() -> None:
     agent = ResearcherAgent(llm=Mock())
     context = StoryContext(
         seed={"theme": "调查", "era": "1920年代"},

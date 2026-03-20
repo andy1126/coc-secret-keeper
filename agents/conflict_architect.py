@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import json
 import logging
-from crewai import Agent, Task, Crew
+from typing import Any
+
+from crewai import Agent, Task, Crew, LLM
 
 from models.story_context import StoryContext
 from models.schemas import ConflictDesign
@@ -11,7 +15,7 @@ logger = logging.getLogger("coc.llm")
 class ConflictArchitectAgent:
     """Agent for designing dramatic conflict structure with self-iteration."""
 
-    def __init__(self, llm):
+    def __init__(self, llm: LLM) -> None:
         self.llm = llm
         self.prompt = self._load_prompt()
 
@@ -20,12 +24,12 @@ class ConflictArchitectAgent:
 
         return load_prompt_with_skills("prompts/conflict_architect.md", "conflict_architect")
 
-    def _find_best_json_block(self, text: str, required_keys: set[str]) -> dict | None:
+    def _find_best_json_block(self, text: str, required_keys: set[str]) -> dict[str, Any] | None:
         """Scan all JSON blocks in text, return the one with most required keys."""
         import re
         from agents.json_utils import _try_parse_json
 
-        best: dict | None = None
+        best: dict[str, Any] | None = None
         best_score = 0
 
         for m in re.finditer(r"```json\s*([\s\S]*?)\s*```", text):
@@ -58,7 +62,7 @@ class ConflictArchitectAgent:
         raise ValueError("Could not extract conflict design from response")
 
     @staticmethod
-    def _normalize_conflict_data(data: dict) -> None:
+    def _normalize_conflict_data(data: dict[str, Any]) -> None:
         """Normalize LLM output quirks before Pydantic validation."""
         # A. Flatten zones nested format (LLM may output it)
         if "zones" in data and "beats" not in data:

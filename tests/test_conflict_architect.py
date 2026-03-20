@@ -1,3 +1,5 @@
+from typing import Any
+
 from unittest.mock import Mock, patch
 from agents.conflict_architect import ConflictArchitectAgent
 from models.story_context import StoryContext
@@ -14,7 +16,7 @@ from models.schemas import (
 )
 
 
-def _make_context_with_world():
+def _make_context_with_world() -> StoryContext:
     ctx = StoryContext(
         seed={"theme": "调查", "era": "1920年代", "target_chapters": 10},
         research_notes=[
@@ -44,12 +46,12 @@ def _make_context_with_world():
     return ctx
 
 
-def test_conflict_architect_creation():
+def test_conflict_architect_creation() -> None:
     agent = ConflictArchitectAgent(llm=Mock())
     assert agent is not None
 
 
-def test_design_conflicts_with_self_iteration():
+def test_design_conflicts_with_self_iteration() -> None:
     agent = ConflictArchitectAgent(llm=Mock())
     context = _make_context_with_world()
 
@@ -111,9 +113,9 @@ def test_design_conflicts_with_self_iteration():
     assert context.conflict_design is design
 
 
-def test_normalize_thread_type_aliases():
+def test_normalize_thread_type_aliases() -> None:
     """Chinese thread_type values are mapped to English."""
-    data = {
+    data: dict[str, Any] = {
         "narrative_strategy": "x",
         "threads": [
             {"name": "t1", "thread_type": "认知", "description": "d", "stakes": "s"},
@@ -121,8 +123,18 @@ def test_normalize_thread_type_aliases():
         ],
         "beats": [
             {"zone": "setup", "name": "a", "description": "a", "threads": ["t1"]},
-            {"zone": "crucible", "name": "b", "description": "b", "threads": ["t1"]},
-            {"zone": "aftermath", "name": "c", "description": "c", "threads": ["t1"]},
+            {
+                "zone": "crucible",
+                "name": "b",
+                "description": "b",
+                "threads": ["t1"],
+            },
+            {
+                "zone": "aftermath",
+                "name": "c",
+                "description": "c",
+                "threads": ["t1"],
+            },
         ],
         "tension_shape": "x",
         "thematic_throughline": "x",
@@ -132,11 +144,14 @@ def test_normalize_thread_type_aliases():
     assert data["threads"][1]["thread_type"] == "moral"
 
 
-def test_normalize_zones_to_flat_beats():
+def test_normalize_zones_to_flat_beats() -> None:
     """Old zones format in normalize_conflict_data gets flattened."""
-    data = {
+    data: dict[str, Any] = {
         "zones": [
-            {"zone": "setup", "beats": [{"name": "a", "description": "a", "threads": ["t"]}]},
+            {
+                "zone": "setup",
+                "beats": [{"name": "a", "description": "a", "threads": ["t"]}],
+            },
             {
                 "zone": "crucible",
                 "beats": [{"name": "b", "description": "b", "threads": ["t"]}],
@@ -155,7 +170,7 @@ def test_normalize_zones_to_flat_beats():
     assert data["beats"][2]["zone"] == "aftermath"
 
 
-def test_extract_conflict_finds_best_block():
+def test_extract_conflict_finds_best_block() -> None:
     """When first JSON block doesn't have required keys, rescan finds better one."""
     agent = ConflictArchitectAgent(llm=Mock())
 

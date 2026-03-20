@@ -13,13 +13,13 @@ from models.schemas import (
 )
 
 
-def test_outliner_creation():
+def test_outliner_creation() -> None:
     mock_llm = Mock()
     agent = OutlinerAgent(llm=mock_llm)
     assert agent is not None
 
 
-def test_create_outline():
+def test_create_outline() -> None:
     mock_llm = Mock()
     agent = OutlinerAgent(llm=mock_llm)
 
@@ -46,7 +46,7 @@ def test_create_outline():
     assert isinstance(outline[0], ChapterOutline)
 
 
-def test_create_outline_with_conflict_design():
+def test_create_outline_with_conflict_design() -> None:
     """Outliner should include conflict_design in task description."""
     mock_llm = Mock()
     agent = OutlinerAgent(llm=mock_llm)
@@ -73,15 +73,24 @@ def test_create_outline_with_conflict_design():
         narrative_strategy="逐步揭示",
         threads=[
             ConflictThread(
-                name="求知之祸", thread_type="epistemic", description="渴望vs恐惧", stakes="理智"
+                name="求知之祸",
+                thread_type="epistemic",
+                description="渴望vs恐惧",
+                stakes="理智",
             ),
             ConflictThread(
-                name="邪教操控", thread_type="societal", description="馆长阻止", stakes="生命"
+                name="邪教操控",
+                thread_type="societal",
+                description="馆长阻止",
+                stakes="生命",
             ),
         ],
         beats=[
             DramaticBeat(
-                zone="setup", name="发现笔记", description="发现笔记", threads=["求知之祸"]
+                zone="setup",
+                name="发现笔记",
+                description="发现笔记",
+                threads=["求知之祸"],
             ),
             DramaticBeat(
                 zone="crucible",
@@ -96,7 +105,10 @@ def test_create_outline_with_conflict_design():
                 threads=["求知之祸", "邪教操控"],
             ),
             DramaticBeat(
-                zone="aftermath", name="真相掩埋", description="真相掩埋", threads=["求知之祸"]
+                zone="aftermath",
+                name="真相掩埋",
+                description="真相掩埋",
+                threads=["求知之祸"],
             ),
         ],
         tension_shape="慢炖型",

@@ -4,7 +4,7 @@ from models.story_context import StoryContext
 from models.schemas import Character, Entity, Location, WorldSetting, ChapterOutline
 
 
-def test_full_pipeline():
+def test_full_pipeline() -> None:
     """Test the full pipeline with mocked LLM."""
     context = StoryContext()
 
@@ -67,7 +67,7 @@ def test_full_pipeline():
     assert len(context.world.characters) > 0
 
 
-def test_review_classification():
+def test_review_classification() -> None:
     """Test review issue classification."""
     from agents.reviewer import ReviewResult
 
@@ -97,7 +97,7 @@ def test_review_classification():
     assert len(result.get_major_issues()) == 1
 
 
-def test_revision_loop_minor_issues():
+def test_revision_loop_minor_issues() -> None:
     """Test that minor issues trigger writer revision."""
     from agents.writer import WriterAgent
 
@@ -147,7 +147,7 @@ def test_revision_loop_minor_issues():
         assert context.chapters[0] == "修订后章节内容..."
 
 
-def test_final_review():
+def test_final_review() -> None:
     """Test final full-text review."""
     from agents.reviewer import ReviewerAgent
 
