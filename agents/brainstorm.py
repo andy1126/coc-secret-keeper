@@ -26,8 +26,9 @@ class BrainstormAgent:
         self.conversation_history: list[dict[str, str]] = []
 
     def _load_prompt(self) -> str:
-        with open("prompts/brainstorm.md", "r", encoding="utf-8") as f:
-            return f.read()
+        from agents.prompt_loader import load_prompt_with_skills
+
+        return load_prompt_with_skills("prompts/brainstorm.md", "brainstorm")
 
     def _extract_seed(self, text: str) -> dict:
         """Extract JSON seed from agent response."""

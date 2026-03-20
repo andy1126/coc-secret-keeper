@@ -16,8 +16,9 @@ class OutlinerAgent:
         self.prompt = self._load_prompt()
 
     def _load_prompt(self) -> str:
-        with open("prompts/outliner.md", "r", encoding="utf-8") as f:
-            return f.read()
+        from agents.prompt_loader import load_prompt_with_skills
+
+        return load_prompt_with_skills("prompts/outliner.md", "outliner")
 
     @staticmethod
     def _format_conflict_for_prompt(conflict: ConflictDesign) -> str:

@@ -20,8 +20,9 @@ class WriterAgent:
         self.prompt = self._load_prompt()
 
     def _load_prompt(self) -> str:
-        with open("prompts/writer.md", "r", encoding="utf-8") as f:
-            return f.read()
+        from agents.prompt_loader import load_prompt_with_skills
+
+        return load_prompt_with_skills("prompts/writer.md", "writer")
 
     def _run_agent(self, task_description: str) -> str:
         """Run the agent with given task."""
@@ -155,9 +156,7 @@ until all beats have been addressed. Check this list before writing your ending.
             if writing_style.get("writing_style_notes"):
                 parts.append(writing_style["writing_style_notes"])
             if parts:
-                style_reminder = (
-                    f"\nRemember to maintain the writing style: {', '.join(parts)}\n"
-                )
+                style_reminder = f"\nRemember to maintain the writing style: {', '.join(parts)}\n"
 
         return f"""
 Revise chapter {chapter.number}: "{chapter.title}"

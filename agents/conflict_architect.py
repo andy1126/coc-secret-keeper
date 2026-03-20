@@ -16,8 +16,9 @@ class ConflictArchitectAgent:
         self.prompt = self._load_prompt()
 
     def _load_prompt(self) -> str:
-        with open("prompts/conflict_architect.md", "r", encoding="utf-8") as f:
-            return f.read()
+        from agents.prompt_loader import load_prompt_with_skills
+
+        return load_prompt_with_skills("prompts/conflict_architect.md", "conflict_architect")
 
     def _find_best_json_block(self, text: str, required_keys: set[str]) -> dict | None:
         """Scan all JSON blocks in text, return the one with most required keys."""
