@@ -12,7 +12,7 @@ logger = logging.getLogger("coc.llm")
 
 
 class OutlinerAgent:
-    """Agent for creating story outlines."""
+    """Agent for creating story outlines — one chapter per LLM call."""
 
     def __init__(self, llm: LLM) -> None:
         self.llm = llm
@@ -43,17 +43,101 @@ class OutlinerAgent:
                     lines.append(f"  · {beat.name}: {beat.description} → [{thread_tags}]")
         return "\n".join(lines)
 
-    def _extract_outline(self, text: str) -> list[ChapterOutline]:
-        """Extract chapter outline from agent response."""
+    @staticmethod
+    def _get_zone_for_chapter(chapter_num: int, total_chapters: int) -> str:
+        """Determine which narrative zone a chapter belongs to based on position."""
+        ratio = chapter_num / total_chapters
+        if ratio <= 0.25:
+            return "setup"
+        elif ratio <= 0.85:
+            return "crucible"
+        else:
+            return "aftermath"
+
+    @staticmethod
+    def _get_position_guidance(zone: str) -> str:
+        """Return Chinese-language guidance for a chapter based on its narrative zone."""
+        guidance = {
+            "setup": (
+                "铺垫区指导：本章处于故事开篇阶段。建立世界观氛围和时代基调，"
+                "引入主要角色及其初始状态，埋设关键伏笔和核心悬念。"
+                "展示角色日常生活以建立读者情感连接，暗示暗流涌动但尚未爆发。"
+            ),
+            "crucible": (
+                "熔炉区指导：本章处于故事中段冲突升级阶段。逐步升级紧张感和危机，"
+                "分层揭示信息但保留核心秘密，推进多条冲突线索的交织。"
+                "设置转折点或反转（如适用），角色面临关键选择展示性格弧线。"
+            ),
+            "aftermath": (
+                "余波区指导：本章处于故事尾声收束阶段。推向高潮和解决，"
+                "回收主要伏笔，完成角色弧线转变，揭示核心真相。"
+                "留下适当的余韵和不确定性，呼应开篇形成结构闭环。"
+            ),
+        }
+        return guidance.get(zone, "")
+
+    def _extract_single_chapter(self, text: str) -> ChapterOutline:
+        """Extract a single ChapterOutline from agent response."""
         from agents.json_utils import extract_json_object
 
         data = extract_json_object(text)
+        if not data:
+            raise ValueError("Could not extract JSON from response")
 
-        if data:
-            chapters = [ChapterOutline(**c) for c in data.get("chapters", [])]
-            return chapters
+        # Prefer old-style {"chapters": [{...}]} as fallback
+        if "chapters" in data and isinstance(data["chapters"], list) and data["chapters"]:
+            return ChapterOutline(**data["chapters"][0])
 
-        raise ValueError("Could not extract outline from response")
+        return ChapterOutline(**data)
+
+    def _build_chapter_task_desc(
+        self,
+        *,
+        seed: dict[str, object],
+        world_dict: dict[str, object],
+        conflict_section: str,
+        chapter_num: int,
+        target_chapters: int,
+        zone: str,
+        previous_chapters_json: str,
+        feedback_section: str,
+        original_chapter: ChapterOutline | None,
+    ) -> str:
+        """Build the task description for a single chapter generation call."""
+        position_guidance = self._get_position_guidance(zone)
+
+        zone_names = {"setup": "铺垫区", "crucible": "熔炉区", "aftermath": "余波区"}
+        zone_name = zone_names.get(zone, zone)
+
+        previous_display = previous_chapters_json if previous_chapters_json else "无（这是第一章）"
+
+        original_section = ""
+        if original_chapter is not None:
+            original_json = json.dumps(original_chapter.model_dump(), ensure_ascii=False, indent=2)
+            original_section = f"""
+本章原始大纲（对比参考，根据反馈选择性修改）:
+{original_json}
+"""
+
+        return f"""生成第 {chapter_num} 章的大纲（共 {target_chapters} 章）
+叙事区域: {zone_name}
+
+{position_guidance}
+
+故事种子:
+{json.dumps(seed, ensure_ascii=False, indent=2)}
+
+世界观设定:
+{json.dumps(world_dict, ensure_ascii=False, indent=2)}
+{conflict_section}
+
+已生成的前文章节:
+{previous_display}
+{original_section}
+{feedback_section}
+
+请输出第 {chapter_num} 章的单个 ChapterOutline JSON 对象（不要包在数组中），严格遵循你 system prompt 中的输出格式。number 字段必须为 {chapter_num}。
+"""
 
     def _run_agent(self, task_description: str) -> str:
         """Run the agent with given task."""
@@ -88,22 +172,8 @@ class OutlinerAgent:
         target_chapters: int = 10,
         feedback: str | None = None,
     ) -> list[ChapterOutline]:
-        """Create chapter outline from world setting."""
+        """Create chapter outline — one chapter per LLM call."""
         world_dict = context.world.model_dump() if context.world else {}
-
-        feedback_section = (
-            f"""
-
-用户反馈（请根据以下反馈修改大纲）:
-{feedback}
-"""
-            if feedback
-            else ""
-        )
-
-        existing_outline = (
-            [c.model_dump() for c in context.outline] if context.outline and feedback else None
-        )
 
         conflict_section = ""
         if context.conflict_design:
@@ -112,49 +182,52 @@ class OutlinerAgent:
 {self._format_conflict_for_prompt(context.conflict_design)}
 """
 
-        if existing_outline:
-            task_desc = f"""
-Based on the following existing outline and user feedback, revise the outline.
-Keep everything the user didn't mention unchanged, only modify what the feedback requests.
-
-Story Seed:
-{json.dumps(context.seed, ensure_ascii=False, indent=2)}
-
-World Setting:
-{json.dumps(world_dict, ensure_ascii=False, indent=2)}
-{conflict_section}
-
-Current Outline:
-{json.dumps(existing_outline, ensure_ascii=False, indent=2)}
-
-{feedback_section}
-
-Target number of chapters: {target_chapters}
-
-Output the revised complete outline following the format in your instructions.
-"""
-        else:
-            task_desc = f"""
-Create a story outline based on:
-
-Story Seed:
-{json.dumps(context.seed, ensure_ascii=False, indent=2)}
-
-World Setting:
-{json.dumps(world_dict, ensure_ascii=False, indent=2)}
-{conflict_section}
-
-Target number of chapters: {target_chapters}
-
-Output a complete outline following the format in your instructions.
-"""
-
-        from agents.json_utils import run_with_retry
-
-        outline = run_with_retry(
-            lambda: self._run_agent(task_desc),
-            self._extract_outline,
-            label="OutlinerAgent",
+        feedback_section = (
+            f"\n\n用户反馈（请考虑以下反馈修改本章）:\n{feedback}" if feedback else ""
         )
+
+        outline: list[ChapterOutline] = []
+
+        for chapter_num in range(1, target_chapters + 1):
+            zone = self._get_zone_for_chapter(chapter_num, target_chapters)
+
+            previous_json = json.dumps(
+                [c.model_dump() for c in outline], ensure_ascii=False, indent=2
+            )
+
+            original_chapter = None
+            if feedback and context.outline and chapter_num <= len(context.outline):
+                original_chapter = context.outline[chapter_num - 1]
+
+            task_desc = self._build_chapter_task_desc(
+                seed=context.seed,
+                world_dict=world_dict,
+                conflict_section=conflict_section,
+                chapter_num=chapter_num,
+                target_chapters=target_chapters,
+                zone=zone,
+                previous_chapters_json=previous_json,
+                feedback_section=feedback_section,
+                original_chapter=original_chapter,
+            )
+
+            from agents.json_utils import run_with_retry
+
+            chapter = run_with_retry(
+                lambda: self._run_agent(task_desc),
+                self._extract_single_chapter,
+                label=f"OutlinerAgent-ch{chapter_num}",
+            )
+
+            # Enforce correct chapter number (LLM might output wrong one)
+            chapter.number = chapter_num
+            outline.append(chapter)
+            logger.info(
+                "OutlinerAgent: chapter %d/%d done — %s",
+                chapter_num,
+                target_chapters,
+                chapter.title,
+            )
+
         context.outline = outline
         return outline
